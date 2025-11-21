@@ -109,21 +109,21 @@ const extendedDummyData = {
     superadmin: {
       totalManagers: 8,
       totalSupervisors: 12,
-      totalEmployees: 85,
+      totalEmployees: 118, // Updated to match sum of all site employees
       totalSites: 35,
       activeTasks: 23,
       pendingLeaves: 7,
-      presentToday: 72,
-      absentToday: 13,
+      presentToday: 103, // Updated to match sum of all present employees
+      absentToday: 15, // Updated to match sum of all absent employees
       activeMachinery: 18,
       totalDebtors: 6,
-      todayAttendance: "84.7%",
+      todayAttendance: "87.3%", // Updated based on new totals
       machineryUnderMaintenance: 4,
       totalOutstanding: 1850000
     }
   },
 
-  // Attendance Data - UPDATED TO MATCH TOTAL EMPLOYEE COUNT
+  // Attendance Data - UPDATED TO SHOW ACTUAL TOTALS FROM SITE SUMS
   attendanceReports: [
     {
       id: '1',
@@ -231,7 +231,7 @@ const extendedDummyData = {
     }
   ],
 
-  // Employee-wise attendance data - UPDATED TO MATCH TOTAL EMPLOYEE COUNT
+  // Employee-wise attendance data - UPDATED TO MATCH TOTAL SITE EMPLOYEE COUNT
   employeeAttendance: [
     {
       id: '1',
@@ -383,7 +383,7 @@ const extendedDummyData = {
       totalHours: '0h',
       overtime: '0 mins'
     },
-    // Additional employees to match total count of 85
+    // Additional employees to match total count of 118 (sum of all site employees)
     {
       id: '11',
       employeeId: 'EMP011',
@@ -459,20 +459,20 @@ const extendedDummyData = {
       totalHours: '0h',
       overtime: '0 mins'
     }
-    // Note: In a real application, we would have 85 total employees here
-    // For demo purposes, we're showing a subset with the understanding that total = 85
+    // Note: In a real application, we would have 118 total employees here
+    // For demo purposes, we're showing a subset with the understanding that total = 118
   ],
 
-  // Daily summary data - UPDATED TO MATCH TOTAL EMPLOYEE COUNT
+  // Daily summary data - UPDATED TO MATCH TOTAL SITE EMPLOYEE COUNT
   dailySummary: {
     date: '2024-01-15',
-    totalEmployees: 85,
-    present: 72,
-    absent: 13,
-    lateArrivals: 6,
+    totalEmployees: 118, // Sum of all site employees
+    present: 103, // Sum of all present employees
+    absent: 15, // Sum of all absent employees
+    lateArrivals: 7,
     halfDays: 2,
     earlyDepartures: 3,
-    overallAttendance: '84.7%',
+    overallAttendance: '87.3%', // Updated based on new totals
     siteWiseSummary: [
       { site: 'GLOBAL SQUARE, YERWADA (HOUSEKEEPING)', present: 13, total: 15, rate: '86.7%' },
       { site: 'GLOBAL SQUARE, YERWADA (SECURITY)', present: 8, total: 8, rate: '100%' },
@@ -484,12 +484,12 @@ const extendedDummyData = {
       { site: 'ASTITVA ASSET MANAGEMENT LLP', present: 19, total: 22, rate: '86.4%' }
     ],
     departmentWiseSummary: [
-      { department: 'Housekeeping', present: 45, total: 52, rate: '86.5%' },
-      { department: 'Security', present: 16, total: 18, rate: '88.9%' },
+      { department: 'Housekeeping', present: 56, total: 65, rate: '86.2%' },
+      { department: 'Security', present: 26, total: 28, rate: '92.9%' },
       { department: 'Parking', present: 5, total: 5, rate: '100%' },
-      { department: 'Waste Management', present: 4, total: 5, rate: '80.0%' },
-      { department: 'STP Tank Cleaning', present: 1, total: 3, rate: '33.3%' },
-      { department: 'Consumables', present: 1, total: 2, rate: '50.0%' }
+      { department: 'Waste Management', present: 8, total: 10, rate: '80.0%' },
+      { department: 'STP Tank Cleaning', present: 5, total: 7, rate: '71.4%' },
+      { department: 'Consumables', present: 3, total: 3, rate: '100%' }
     ]
   },
 
@@ -1062,17 +1062,22 @@ const SuperAdminDashboard = () => {
   const [debtorSearch, setDebtorSearch] = useState('');
   const [debtorStatusFilter, setDebtorStatusFilter] = useState('all');
 
+  // Calculate actual counts from site data (sum of all site employees)
+  const totalEmployeeCountFromSites = attendanceReports.reduce((sum, site) => sum + site.totalEmployees, 0);
+  const presentEmployeeCountFromSites = attendanceReports.reduce((sum, site) => sum + site.present, 0);
+  const absentEmployeeCountFromSites = attendanceReports.reduce((sum, site) => sum + site.absent, 0);
+
   // Calculate actual counts from employee data
   const totalEmployeeCount = employeeAttendance.length;
   const presentEmployeeCount = employeeAttendance.filter(emp => emp.status === 'present').length;
   const absentEmployeeCount = employeeAttendance.filter(emp => emp.status === 'absent').length;
 
-  // Update stats with actual counts
+  // Use site-based calculations for consistency (sum of all site totals)
   const updatedStats = {
     ...stats,
-    totalEmployees: totalEmployeeCount,
-    presentToday: presentEmployeeCount,
-    absentToday: absentEmployeeCount
+    totalEmployees: totalEmployeeCountFromSites, // 118 (sum of all site employees)
+    presentToday: presentEmployeeCountFromSites, // 103 (sum of all present employees)
+    absentToday: absentEmployeeCountFromSites // 15 (sum of all absent employees)
   };
 
   // Filter functions for Attendance
@@ -1308,7 +1313,7 @@ const SuperAdminDashboard = () => {
       />
 
       <div className="p-4 sm:p-6 space-y-6">
-        {/* Stats Grid - UPDATED WITH CONSISTENT COUNTS */}
+        {/* Stats Grid - UPDATED WITH CONSISTENT COUNTS FROM SITE SUMS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div 
             className="cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-lg"
@@ -1320,6 +1325,7 @@ const SuperAdminDashboard = () => {
               icon={Users}
               trend={{ value: 8, isPositive: true }}
               delay={0}
+              description={`Across ${attendanceReports.length} sites`}
             />
           </div>
           <div 
@@ -1332,6 +1338,7 @@ const SuperAdminDashboard = () => {
               icon={UserCheck}
               trend={{ value: 5, isPositive: true }}
               delay={0.1}
+              description={`${((updatedStats.presentToday / updatedStats.totalEmployees) * 100).toFixed(1)}% attendance`}
             />
           </div>
           <div 
@@ -1344,6 +1351,7 @@ const SuperAdminDashboard = () => {
               icon={AlertCircle}
               trend={{ value: 2, isPositive: false }}
               delay={0.2}
+              description={`${((updatedStats.absentToday / updatedStats.totalEmployees) * 100).toFixed(1)}% absence`}
             />
           </div>
           <StatCard
@@ -1352,6 +1360,7 @@ const SuperAdminDashboard = () => {
             icon={FileText}
             trend={{ value: 8, isPositive: false }}
             delay={0.3}
+            description="From all debtors"
           />
         </div>
 
@@ -1434,6 +1443,20 @@ const SuperAdminDashboard = () => {
                   );
                 })}
               </div>
+              {/* Total Summary */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">Total Across All Departments</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {dailySummary.departmentWiseSummary.reduce((sum, dept) => sum + dept.present, 0)} / {dailySummary.departmentWiseSummary.reduce((sum, dept) => sum + dept.total, 0)} Employees
+                    </p>
+                  </div>
+                  <Badge variant="default" className="bg-blue-600">
+                    {dailySummary.overallAttendance}
+                  </Badge>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -1505,7 +1528,7 @@ const SuperAdminDashboard = () => {
                     </Button>
                   </div>
 
-                  {/* Attendance Summary Cards - UPDATED WITH CONSISTENT COUNTS */}
+                  {/* Attendance Summary Cards - UPDATED WITH CONSISTENT COUNTS FROM SITE SUMS */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <Card 
                       className="cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-md border-2 border-blue-200"
@@ -1516,6 +1539,7 @@ const SuperAdminDashboard = () => {
                           <div>
                             <p className="text-sm font-medium">Total Employees</p>
                             <p className="text-2xl font-bold">{updatedStats.totalEmployees}</p>
+                            <p className="text-xs text-muted-foreground">Across all sites</p>
                           </div>
                           <UsersIcon className="h-8 w-8 text-blue-600" />
                         </div>
@@ -1530,6 +1554,9 @@ const SuperAdminDashboard = () => {
                           <div>
                             <p className="text-sm font-medium">Present</p>
                             <p className="text-2xl font-bold text-green-600">{updatedStats.presentToday}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {((updatedStats.presentToday / updatedStats.totalEmployees) * 100).toFixed(1)}% of total
+                            </p>
                           </div>
                           <UserCheck className="h-8 w-8 text-green-600" />
                         </div>
@@ -1544,6 +1571,9 @@ const SuperAdminDashboard = () => {
                           <div>
                             <p className="text-sm font-medium">Absent</p>
                             <p className="text-2xl font-bold text-red-600">{updatedStats.absentToday}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {((updatedStats.absentToday / updatedStats.totalEmployees) * 100).toFixed(1)}% of total
+                            </p>
                           </div>
                           <AlertCircle className="h-8 w-8 text-red-600" />
                         </div>
@@ -1555,12 +1585,42 @@ const SuperAdminDashboard = () => {
                           <div>
                             <p className="text-sm font-medium">Late Arrivals</p>
                             <p className="text-2xl font-bold text-orange-600">{totalLate}</p>
+                            <p className="text-xs text-muted-foreground">Across all employees</p>
                           </div>
                           <Clock className="h-8 w-8 text-orange-600" />
                         </div>
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* Site-wise Summary */}
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                    <CardHeader className="pb-4 px-4 sm:px-6">
+                      <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-blue-600" />
+                        Overall Site Summary
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Total employees calculated from all site allocations
+                      </p>
+                    </CardHeader>
+                    <CardContent className="px-4 sm:px-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                        <div className="bg-white p-4 rounded-lg border border-blue-100">
+                          <p className="text-sm font-medium text-blue-800">Total Sites</p>
+                          <p className="text-2xl font-bold text-blue-600">{attendanceReports.length}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-green-100">
+                          <p className="text-sm font-medium text-green-800">Total Site Employees</p>
+                          <p className="text-2xl font-bold text-green-600">{updatedStats.totalEmployees}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-purple-100">
+                          <p className="text-sm font-medium text-purple-800">Overall Attendance</p>
+                          <p className="text-2xl font-bold text-purple-600">{dailySummary.overallAttendance}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Enhanced Bar Chart */}
                   <Card className="border-2 border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-lg">
