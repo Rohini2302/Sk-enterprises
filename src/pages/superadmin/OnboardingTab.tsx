@@ -1,4 +1,3 @@
-// src/components/hrms/tabs/OnboardingTab.tsx
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,10 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Upload, Trash2, Camera, Download, Eye, X } from "lucide-react";
+import { FileText, Plus, Upload, Trash2, Camera, X, Save, Edit, Download } from "lucide-react";
 import { toast } from "sonner";
-import { Employee, SalaryStructure, NewEmployeeForm } from "./types";
+import { Employee, SalaryStructure, NewEmployeeForm, EPFForm11Data } from "./types";
 import FormField from "./FormField";
 
 interface OnboardingTabProps {
@@ -17,10 +15,10 @@ interface OnboardingTabProps {
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
   salaryStructures: SalaryStructure[];
   setSalaryStructures: React.Dispatch<React.SetStateAction<SalaryStructure[]>>;
-  newJoinees: Employee[];
-  setNewJoinees: React.Dispatch<React.SetStateAction<Employee[]>>;
-  leftEmployees: Employee[];
-  setLeftEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
+  newJoinees?: Employee[];
+  setNewJoinees?: React.Dispatch<React.SetStateAction<Employee[]>>;
+  leftEmployees?: Employee[];
+  setLeftEmployees?: React.Dispatch<React.SetStateAction<Employee[]>>;
 }
 
 const departments = [
@@ -37,8 +35,8 @@ const OnboardingTab = ({
   setEmployees, 
   salaryStructures, 
   setSalaryStructures,
-  newJoinees,
-  setNewJoinees,
+  newJoinees = [], // Default to empty array if undefined
+  setNewJoinees, // Optional prop
   leftEmployees,
   setLeftEmployees
 }: OnboardingTabProps) => {
@@ -80,16 +78,119 @@ const OnboardingTab = ({
     westcoatIssued: false,
     apronIssued: false,
     employeeSignature: null,
-    authorizedSignature: null
+    authorizedSignature: null,
+    panNumber: "",
+    esicNumber: "",
+    uanNumber: ""
   });
 
   const [uploadedDocuments, setUploadedDocuments] = useState<File[]>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [showEPFForm11, setShowEPFForm11] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [epfFormData, setEpfFormData] = useState<EPFForm11Data>({
+    // Section 1-6
+    memberName: "",
+    fatherOrSpouseName: "",
+    relationshipType: "father", // 'father' or 'spouse'
+    dateOfBirth: "",
+    gender: "",
+    maritalStatus: "",
+    email: "",
+    mobileNumber: "",
+    
+    // Section 7-8
+    previousEPFMember: false,
+    previousPensionMember: false,
+    
+    // Section 9 - Previous Employment
+    previousUAN: "",
+    previousPFAccountNumber: "",
+    dateOfExit: "",
+    schemeCertificateNumber: "",
+    pensionPaymentOrder: "",
+    
+    // Section 10 - International Worker
+    internationalWorker: false,
+    countryOfOrigin: "",
+    passportNumber: "",
+    passportValidityFrom: "",
+    passportValidityTo: "",
+    
+    // Section 11 - KYC Details
+    bankAccountNumber: "",
+    ifscCode: "",
+    aadharNumber: "",
+    panNumber: "",
+    
+    // Section 12 - Declaration Details
+    firstEPFMember: false,
+    enrolledDate: "",
+    firstEmploymentWages: "",
+    epfMemberBeforeSep2014: false,
+    epfAmountWithdrawn: false,
+    epsAmountWithdrawn: false,
+    epsAmountWithdrawnAfterSep2014: false,
+    
+    // Signatures
+    declarationDate: "",
+    declarationPlace: "",
+    employerDeclarationDate: ""
+  });
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Initialize EPF Form with employee data
+  const initializeEPFForm = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setEpfFormData({
+      memberName: employee.name,
+      fatherOrSpouseName: employee.fatherName || employee.spouseName || "",
+      relationshipType: employee.fatherName ? "father" : "spouse",
+      dateOfBirth: employee.dateOfBirth || "",
+      gender: "",
+      maritalStatus: "",
+      email: employee.email,
+      mobileNumber: employee.phone || "",
+      
+      previousEPFMember: false,
+      previousPensionMember: false,
+      
+      previousUAN: "",
+      previousPFAccountNumber: "",
+      dateOfExit: "",
+      schemeCertificateNumber: "",
+      pensionPaymentOrder: "",
+      
+      internationalWorker: false,
+      countryOfOrigin: "",
+      passportNumber: "",
+      passportValidityFrom: "",
+      passportValidityTo: "",
+      
+      bankAccountNumber: employee.accountNumber || "",
+      ifscCode: employee.ifscCode || "",
+      aadharNumber: employee.aadharNumber,
+      panNumber: employee.panNumber || "",
+      
+      firstEPFMember: true,
+      enrolledDate: employee.joinDate,
+      firstEmploymentWages: employee.salary?.toString() || "",
+      epfMemberBeforeSep2014: false,
+      epfAmountWithdrawn: false,
+      epsAmountWithdrawn: false,
+      epsAmountWithdrawnAfterSep2014: false,
+      
+      declarationDate: new Date().toISOString().split('T')[0],
+      declarationPlace: "",
+      employerDeclarationDate: new Date().toISOString().split('T')[0]
+    });
+    setShowEPFForm11(true);
+  };
 
   // Camera functions
   const startCamera = async () => {
@@ -256,8 +357,9 @@ const OnboardingTab = ({
       joinDate: newEmployee.dateOfJoining || new Date().toISOString().split('T')[0],
       status: "active",
       salary: Number(newEmployee.salary),
-      uan: `1012345678${String(employees.length + 1).padStart(2, '0')}`,
-      esicNumber: `2312345678${String(employees.length + 1).padStart(2, '0')}`,
+      uan: newEmployee.uanNumber || `1012345678${String(employees.length + 1).padStart(2, '0')}`,
+      esicNumber: newEmployee.esicNumber || `2312345678${String(employees.length + 1).padStart(2, '0')}`,
+      panNumber: newEmployee.panNumber || "",
       photo: newEmployee.photo,
       documents: uploadedDocuments.map((doc, index) => ({
         id: index + 1,
@@ -309,7 +411,16 @@ const OnboardingTab = ({
 
     setEmployees([...employees, employee]);
     setSalaryStructures([...salaryStructures, defaultSalaryStructure]);
-    setNewJoinees([...newJoinees, employee]);
+    
+    // Check if setNewJoinees is a function before calling it
+    if (typeof setNewJoinees === 'function') {
+      const currentNewJoinees = Array.isArray(newJoinees) ? newJoinees : [];
+      setNewJoinees([...currentNewJoinees, employee]);
+    } else {
+      // If setNewJoinees is not provided, we can still add the employee
+      // but we just don't update the newJoinees list
+      console.log("setNewJoinees function not provided");
+    }
     
     // Reset form
     setNewEmployee({
@@ -319,34 +430,11 @@ const OnboardingTab = ({
       accountNumber: "", ifscCode: "", branchName: "", fatherName: "", motherName: "", spouseName: "",
       numberOfChildren: "", emergencyContactName: "", emergencyContactPhone: "", emergencyContactRelation: "",
       nomineeName: "", nomineeRelation: "", pantSize: "", shirtSize: "", capSize: "", idCardIssued: false,
-      westcoatIssued: false, apronIssued: false, employeeSignature: null, authorizedSignature: null
+      westcoatIssued: false, apronIssued: false, employeeSignature: null, authorizedSignature: null,
+      panNumber: "", esicNumber: "", uanNumber: ""
     });
     setUploadedDocuments([]);
     toast.success("Employee added successfully!");
-  };
-
-  const handleMarkAsLeft = (employee: Employee) => {
-    const updatedEmployees = employees.filter(emp => emp.id !== employee.id);
-    const updatedNewJoinees = newJoinees.filter(emp => emp.id !== employee.id);
-    const leftEmployee = { ...employee, status: "left" as const, exitDate: new Date().toISOString().split('T')[0] };
-    
-    setEmployees(updatedEmployees);
-    setNewJoinees(updatedNewJoinees);
-    setLeftEmployees([...leftEmployees, leftEmployee]);
-    toast.success("Employee marked as left");
-  };
-
-  const handleDeleteEmployee = (employee: Employee) => {
-    if (window.confirm("Are you sure you want to delete this employee? This action cannot be undone.")) {
-      const updatedEmployees = employees.filter(emp => emp.id !== employee.id);
-      const updatedNewJoinees = newJoinees.filter(emp => emp.id !== employee.id);
-      const updatedLeftEmployees = leftEmployees.filter(emp => emp.id !== employee.id);
-      
-      setEmployees(updatedEmployees);
-      setNewJoinees(updatedNewJoinees);
-      setLeftEmployees(updatedLeftEmployees);
-      toast.success("Employee deleted successfully");
-    }
   };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,230 +462,451 @@ const OnboardingTab = ({
     }
   };
 
-  // Form generation functions
-  const generateIDCard = (employee: Employee) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Please allow popups to generate ID card");
+  // EPF Form 11 Handlers
+  const handleEPFFormChange = (field: keyof EPFForm11Data, value: any) => {
+    setEpfFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSaveEPFForm = () => {
+    // Validate required fields
+    if (!epfFormData.memberName || !epfFormData.aadharNumber) {
+      toast.error("Please fill all required fields (Name and Aadhar Number)");
       return;
     }
 
-    const photoUrl = employee.photo ? URL.createObjectURL(employee.photo) : '';
+    // Save form data (in a real app, this would save to database)
+    toast.success("EPF Form 11 saved successfully!");
     
+    // You can also update the employee record with the form data
+    if (selectedEmployee) {
+      const updatedEmployees = employees.map(emp => 
+        emp.id === selectedEmployee.id 
+          ? { ...emp, epfForm11: epfFormData }
+          : emp
+      );
+      setEmployees(updatedEmployees);
+    }
+  };
+
+  const handlePrintEPFForm = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Please allow popups to print forms");
+      return;
+    }
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>ID Card - ${employee.name}</title>
+          <title>EPF Form 11 - ${epfFormData.memberName}</title>
           <style>
             body { 
               font-family: Arial, sans-serif; 
               margin: 0; 
               padding: 20px;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              background: #f5f5f5;
+              font-size: 12px;
+              line-height: 1.4;
             }
-            .id-card {
-              width: 350px;
-              background: white;
-              border-radius: 15px;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-              overflow: hidden;
-              border: 2px solid #e11d48;
-            }
-            .header {
-              background: linear-gradient(135deg, #e11d48, #be123c);
-              color: white;
+            .form-container { 
+              max-width: 800px; 
+              margin: 0 auto; 
+              border: 1px solid #000;
               padding: 20px;
-              text-align: center;
+              position: relative;
             }
-            .header h1 {
+            .header { 
+              text-align: center; 
+              margin-bottom: 20px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 10px;
+            }
+            .header h2 {
               margin: 0;
-              font-size: 24px;
+              font-size: 16px;
               font-weight: bold;
             }
-            .header .subtitle {
-              font-size: 12px;
-              opacity: 0.9;
+            .header h3 {
+              margin: 5px 0;
+              font-size: 14px;
+              font-weight: normal;
             }
-            .photo-section {
-              padding: 20px;
-              text-align: center;
-              background: white;
-            }
-            .employee-photo {
-              width: 120px;
-              height: 120px;
-              border-radius: 50%;
-              border: 3px solid #e11d48;
-              object-fit: cover;
-              margin: 0 auto;
-            }
-            .details {
-              padding: 20px;
-              background: white;
-            }
-            .detail-row {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 8px;
-              padding: 4px 0;
-              border-bottom: 1px solid #f0f0f0;
-            }
-            .label {
-              font-weight: bold;
-              color: #666;
-              font-size: 12px;
-            }
-            .value {
-              color: #333;
-              font-size: 12px;
-            }
-            .footer {
-              background: #f8f9fa;
-              padding: 15px;
-              text-align: center;
-              border-top: 1px solid #e9ecef;
-            }
-            .signature {
-              margin-top: 10px;
-              border-top: 1px solid #ccc;
-              padding-top: 5px;
+            .subtitle {
               font-size: 10px;
+              margin-top: 5px;
+              font-style: italic;
+            }
+            .section { 
+              margin-bottom: 20px; 
+            }
+            .section-title { 
+              background: #f0f0f0; 
+              padding: 8px; 
+              font-weight: bold;
+              border: 1px solid #000;
+              margin-bottom: 10px;
+              font-size: 11px;
+            }
+            .field-row {
+              display: flex;
+              margin-bottom: 8px;
+              align-items: flex-start;
+            }
+            .field-group {
+              display: flex;
+              flex-direction: column;
+              margin-right: 20px;
+              flex: 1;
+            }
+            .label { 
+              font-weight: bold; 
+              margin-bottom: 2px;
+              font-size: 10px;
+            }
+            .value { 
+              min-height: 18px;
+              border-bottom: 1px solid #000;
+              padding: 2px 5px;
+              flex: 1;
+            }
+            .checkbox-group {
+              display: flex;
+              align-items: center;
+              margin-right: 15px;
+            }
+            .checkbox {
+              margin-right: 5px;
+            }
+            .full-width {
+              width: 100%;
+            }
+            .half-width {
+              width: 48%;
+            }
+            .quarter-width {
+              width: 24%;
+            }
+            .signature-area { 
+              margin-top: 30px; 
+              border-top: 1px solid #000; 
+              padding-top: 15px;
+            }
+            .signature-line {
+              display: inline-block;
+              width: 200px;
+              border-bottom: 1px solid #000;
+              margin: 0 10px;
+            }
+            .declaration {
+              margin: 20px 0;
+              padding: 15px;
+              border: 1px solid #000;
+              background: #f9f9f9;
+            }
+            .declaration p {
+              margin: 5px 0;
+              font-size: 11px;
+            }
+            .note {
+              font-size: 10px;
+              font-style: italic;
               color: #666;
+              margin-top: 3px;
             }
             @media print {
-              body { background: white; }
-              .id-card { box-shadow: none; }
+              body { margin: 0; padding: 10px; }
+              .form-container { border: none; padding: 10px; }
             }
           </style>
         </head>
         <body>
-          <div class="id-card">
-            <div class="header">
-              <h1>SK ENTERPRISES</h1>
-              <div class="subtitle">ID CARD</div>
-            </div>
-            <div class="photo-section">
-              ${photoUrl ? `<img src="${photoUrl}" alt="Employee Photo" class="employee-photo" />` : '<div class="employee-photo" style="background: #ccc; display: flex; align-items: center; justify-content: center; color: #666;">No Photo</div>'}
-            </div>
-            <div class="details">
-              <div class="detail-row">
-                <span class="label">Name:</span>
-                <span class="value">${employee.name}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">Employee ID:</span>
-                <span class="value">${employee.employeeId}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">Department:</span>
-                <span class="value">${employee.department}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">Position:</span>
-                <span class="value">${employee.position}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">Blood Group:</span>
-                <span class="value">${employee.bloodGroup || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="label">Join Date:</span>
-                <span class="value">${employee.joinDate}</span>
-              </div>
-            </div>
-            <div class="footer">
-              <div>Authorized Signature</div>
-              <div class="signature">This card is property of SK Enterprises</div>
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => {
-                window.close();
-              }, 1000);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  const downloadIDCard = (employee: Employee) => {
-    generateIDCard(employee);
-    toast.success(`ID Card downloaded for ${employee.name}`);
-  };
-
-  const downloadNomineeForm = (employee: Employee) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Please allow popups to generate forms");
-      return;
-    }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Nominee Form - ${employee.name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .form-container { max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .section { margin-bottom: 25px; }
-            .section-title { background: #f0f0f0; padding: 10px; font-weight: bold; }
-            .field { margin-bottom: 10px; }
-            .label { font-weight: bold; display: inline-block; width: 200px; }
-            .signature-area { margin-top: 50px; border-top: 1px solid #000; padding-top: 10px; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
           <div class="form-container">
             <div class="header">
-              <h2>SK ENTERPRISES</h2>
-              <h3>Nomination Form for Provident Fund</h3>
+              <h2>New Form : 11 - Declaration Form</h2>
+              <h3>(To be retained by the employer for future reference)</h3>
+              <div class="subtitle">EMPLOYEES' PROVIDENT FUND ORGANISATION</div>
+              <div class="subtitle">Employees' Provident Fund Scheme, 1952 (Paragraph 34 & 57) and Employees' Pension Scheme, 1995 (Paragraph 24)</div>
+              <div class="subtitle">(Declaration by a person taking up Employment in any Establishment on which EPF Scheme, 1952 and for EPS, 1995 is applicable)</div>
             </div>
             
             <div class="section">
-              <div class="section-title">Employee Details</div>
-              <div class="field"><span class="label">Name:</span> ${employee.name}</div>
-              <div class="field"><span class="label">Employee ID:</span> ${employee.employeeId}</div>
-              <div class="field"><span class="label">UAN Number:</span> ${employee.uan}</div>
-              <div class="field"><span class="label">Department:</span> ${employee.department}</div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Nominee Details</div>
-              <div class="field"><span class="label">Nominee Name:</span> ${employee.nomineeName || '________________'}</div>
-              <div class="field"><span class="label">Relationship:</span> ${employee.nomineeRelation || '________________'}</div>
-              <div class="field"><span class="label">Date of Birth:</span> ________________</div>
-              <div class="field"><span class="label">Address:</span> ________________</div>
-              <div class="field"><span class="label">Share Percentage:</span> ________________</div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Guardian Details (if nominee is minor)</div>
-              <div class="field"><span class="label">Guardian Name:</span> ________________</div>
-              <div class="field"><span class="label">Relationship:</span> ________________</div>
-              <div class="field"><span class="label">Address:</span> ________________</div>
-            </div>
-
-            <div class="signature-area">
-              <div class="field">
-                <span class="label">Employee Signature:</span> ________________
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">1. Name of Member (Aadhar Name)</div>
+                  <div class="value">${epfFormData.memberName}</div>
+                </div>
               </div>
-              <div class="field">
-                <span class="label">Date:</span> ________________
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">2. ${epfFormData.relationshipType === 'father' ? 'Father\'s Name' : 'Spouse\'s Name'}</div>
+                  <div class="value">${epfFormData.fatherOrSpouseName}</div>
+                  <div class="note">(Please tick whichever applicable)</div>
+                </div>
               </div>
-              <div class="field">
-                <span class="label">Employer Signature:</span> ________________
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">3. Date of Birth (dd/mm/yyyy)</div>
+                  <div class="value">${epfFormData.dateOfBirth}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">4. Gender (Male / Female / Transgender)</div>
+                  <div class="value">${epfFormData.gender}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">5. Marital Status ? (Single/Married/Widow/Widower/Divorcee)</div>
+                  <div class="value">${epfFormData.maritalStatus}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">6. (a) eMail ID</div>
+                  <div class="value">${epfFormData.email}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">(b) Mobile No (Aadhar Registered)</div>
+                  <div class="value">${epfFormData.mobileNumber}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">7. Whether earlier member of the Employee's Provident Fund Scheme, 1952 ?</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.previousEPFMember ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.previousEPFMember ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">8. Whether earlier member of the Employee's Pension Scheme, 1995 ?</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.previousPensionMember ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.previousPensionMember ? 'checked' : ''}> No
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-title">9. Previous Employment details ? (If Yes, 7 & 8 details above)</div>
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">a) Universal Account Number (UAN)</div>
+                  <div class="value">${epfFormData.previousUAN}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">b) Previous PF Account Number</div>
+                  <div class="value">${epfFormData.previousPFAccountNumber}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">c) Date of Exit from previous Employment ? (dd/mm/yyyy)</div>
+                  <div class="value">${epfFormData.dateOfExit}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">d) Scheme Certificate No (If issued)</div>
+                  <div class="value">${epfFormData.schemeCertificateNumber}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">e) Pension Payment Order (PPO) (If issued)</div>
+                  <div class="value">${epfFormData.pensionPaymentOrder}</div>
+                </div>
+              </div>
+
+              <div class="section-title">10. International Worker Details</div>
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">a) International Worker</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.internationalWorker ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.internationalWorker ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">b) If Yes, state country of origin (name of other country)</div>
+                  <div class="value">${epfFormData.countryOfOrigin}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">c) Passport No.</div>
+                  <div class="value">${epfFormData.passportNumber}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">d) Validity of passport (dd/mm/yyyy) to (dd/mm/yyyy)</div>
+                  <div class="value">${epfFormData.passportValidityFrom} to ${epfFormData.passportValidityTo}</div>
+                </div>
+              </div>
+
+              <div class="section-title">11. KYC Details : (attach self attested copies of following KYC's)</div>
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">a) Bank Account No. & IFS Code</div>
+                  <div class="value">${epfFormData.bankAccountNumber} / ${epfFormData.ifscCode}</div>
+                </div>
+                <div class="field-group half-width">
+                  <div class="label">b) AADHAR Number</div>
+                  <div class="value">${epfFormData.aadharNumber}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group half-width">
+                  <div class="label">c) Permanent Account Number (PAN), If available</div>
+                  <div class="value">${epfFormData.panNumber}</div>
+                </div>
+              </div>
+
+              <div class="section-title">12. Declaration Details</div>
+              <div class="field-row">
+                <div class="field-group quarter-width">
+                  <div class="label">First EPF Member</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.firstEPFMember ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.firstEPFMember ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group quarter-width">
+                  <div class="label">Enrolled Date</div>
+                  <div class="value">${epfFormData.enrolledDate}</div>
+                </div>
+                <div class="field-group quarter-width">
+                  <div class="label">First Employment EPF Wages</div>
+                  <div class="value">₹${epfFormData.firstEmploymentWages}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group quarter-width">
+                  <div class="label">Are you EPF Member before 01/09/2014</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.epfMemberBeforeSep2014 ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.epfMemberBeforeSep2014 ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group quarter-width">
+                  <div class="label">If Yes, EPF Amount Withdrawn?</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.epfAmountWithdrawn ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.epfAmountWithdrawn ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group quarter-width">
+                  <div class="label">If Yes, EPS (Pension) Amount Withdrawn?</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.epsAmountWithdrawn ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.epsAmountWithdrawn ? 'checked' : ''}> No
+                  </div>
+                </div>
+                <div class="field-group quarter-width">
+                  <div class="label">After Sep 2014 earned EPS (Pension) Amount Withdrawn before Join current Employer?</div>
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="checkbox" ${epfFormData.epsAmountWithdrawnAfterSep2014 ? 'checked' : ''}> Yes
+                    <input type="checkbox" class="checkbox" ${!epfFormData.epsAmountWithdrawnAfterSep2014 ? 'checked' : ''}> No
+                  </div>
+                </div>
+              </div>
+
+              <div class="declaration">
+                <p><strong>UNDERTAKING</strong></p>
+                <p>1) Certified that the particulars are true to the best of my knowledge</p>
+                <p>2) I authorise EPFO to use my Aadhar for verification / authentication / eKYC purpose for service delivery</p>
+                <p>3) Kindly transfer the fund and service details, if applicable, from the previous PF account as declared above to the present PF account.</p>
+                <p>(The transfer would be possible only if the identified KYC details approved by previous employer has been verified by present employer using his Digital Signature</p>
+                <p>4) In case of changes in above details, the same will be intimated to employer at the earliest.</p>
+              </div>
+
+              <div class="signature-area">
+                <div class="field-row">
+                  <div class="field-group half-width">
+                    <div class="label">Date :</div>
+                    <div class="value">${epfFormData.declarationDate}</div>
+                  </div>
+                  <div class="field-group half-width">
+                    <div class="label">Place :</div>
+                    <div class="value">________________</div>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field-group full-width">
+                    <div class="label">Signature of Member</div>
+                    <div class="value" style="height: 40px;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-title">DECLARATION BY PRESENT EMPLOYER</div>
+              
+              <div class="field-row">
+                <div class="field-group full-width">
+                  <div class="label">A. The member Mr./Ms./Mrs. ${epfFormData.memberName} has joined on ${epfFormData.enrolledDate} and has been allotted PF Number ${selectedEmployee?.uan}</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group full-width">
+                  <div class="label">B. In case the person was earlier not a member of EPF Scheme, 1952 and EPS, 1995: ((Post allotment of UAN) The UAN allotted or the member is) Please Tick the Appropriate Option :</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="checkbox-group">
+                  <input type="checkbox" class="checkbox"> The KYC details of the above member in the JAN database have not been uploaded
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="checkbox-group">
+                  <input type="checkbox" class="checkbox"> Have been uploaded but not approved
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="checkbox-group">
+                  <input type="checkbox" class="checkbox"> Have been uploaded and approved with DSC
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-group full-width">
+                  <div class="label">C. In case the person was earlier a member of EPF Scheme, 1952 and EPS 1995;</div>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="checkbox-group">
+                  <input type="checkbox" class="checkbox"> The KYC details of the above member in the UAN database have been approved with Digital Signature Certificate and transfer request has been generated on portal
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="checkbox-group">
+                  <input type="checkbox" class="checkbox"> As the DSC of establishment are not registered with EPFO, the member has been informed to file physical claim (Form-13) for transfer of funds from his previous establishment.
+                </div>
+              </div>
+
+              <div class="signature-area">
+                <div class="field-row">
+                  <div class="field-group half-width">
+                    <div class="label">Date :</div>
+                    <div class="value">${epfFormData.employerDeclarationDate}</div>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field-group full-width">
+                    <div class="label">Signature of Employer with Seal of Establishment</div>
+                    <div class="value" style="height: 40px;"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -613,195 +922,6 @@ const OnboardingTab = ({
       </html>
     `);
     printWindow.document.close();
-    toast.success(`Nominee Form generated for ${employee.name}`);
-  };
-
-  const downloadPFForm = (employee: Employee) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Please allow popups to generate forms");
-      return;
-    }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>PF Declaration Form - ${employee.name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .form-container { max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .section { margin-bottom: 25px; }
-            .section-title { background: #f0f0f0; padding: 10px; font-weight: bold; }
-            .field { margin-bottom: 10px; }
-            .label { font-weight: bold; display: inline-block; width: 250px; }
-            .signature-area { margin-top: 50px; border-top: 1px solid #000; padding-top: 10px; }
-            .declaration { margin: 20px 0; padding: 15px; border: 1px solid #000; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="form-container">
-            <div class="header">
-              <h2>SK ENTERPRISES</h2>
-              <h3>Provident Fund Declaration Form</h3>
-            </div>
-            
-            <div class="section">
-              <div class="section-title">Employee Information</div>
-              <div class="field"><span class="label">Full Name:</span> ${employee.name}</div>
-              <div class="field"><span class="label">Employee ID:</span> ${employee.employeeId}</div>
-              <div class="field"><span class="label">UAN Number:</span> ${employee.uan}</div>
-              <div class="field"><span class="label">Date of Joining:</span> ${employee.joinDate}</div>
-              <div class="field"><span class="label">Department:</span> ${employee.department}</div>
-              <div class="field"><span class="label">Designation:</span> ${employee.position}</div>
-              <div class="field"><span class="label">Basic Salary:</span> ₹${employee.salary}</div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Previous PF Details (if any)</div>
-              <div class="field"><span class="label">Previous UAN:</span> ________________</div>
-              <div class="field"><span class="label">Previous Employer:</span> ________________</div>
-              <div class="field"><span class="label">PF Account Number:</span> ________________</div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Bank Account Details</div>
-              <div class="field"><span class="label">Bank Name:</span> ${employee.bankName || '________________'}</div>
-              <div class="field"><span class="label">Account Number:</span> ${employee.accountNumber || '________________'}</div>
-              <div class="field"><span class="label">IFSC Code:</span> ${employee.ifscCode || '________________'}</div>
-            </div>
-
-            <div class="declaration">
-              <p><strong>Declaration:</strong></p>
-              <p>I hereby declare that the information provided above is true and correct to the best of my knowledge. I agree to contribute to the Provident Fund as per the rules and regulations.</p>
-            </div>
-
-            <div class="signature-area">
-              <div class="field">
-                <span class="label">Employee Signature:</span> ________________
-              </div>
-              <div class="field">
-                <span class="label">Date:</span> ________________
-              </div>
-              <div class="field">
-                <span class="label">Witness Signature:</span> ________________
-              </div>
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => {
-                window.close();
-              }, 1000);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    toast.success(`PF Form generated for ${employee.name}`);
-  };
-
-  const downloadESICForm = (employee: Employee) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Please allow popups to generate forms");
-      return;
-    }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>ESIC Form - ${employee.name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .form-container { max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .section { margin-bottom: 25px; }
-            .section-title { background: #f0f0f0; padding: 10px; font-weight: bold; }
-            .field { margin-bottom: 10px; }
-            .label { font-weight: bold; display: inline-block; width: 250px; }
-            .signature-area { margin-top: 50px; border-top: 1px solid #000; padding-top: 10px; }
-            .family-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-            .family-table th, .family-table td { border: 1px solid #000; padding: 8px; text-align: left; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="form-container">
-            <div class="header">
-              <h2>SK ENTERPRISES</h2>
-              <h3>ESIC Family Declaration Form</h3>
-            </div>
-            
-            <div class="section">
-              <div class="section-title">Employee Details</div>
-              <div class="field"><span class="label">Name:</span> ${employee.name}</div>
-              <div class="field"><span class="label">ESIC Number:</span> ${employee.esicNumber}</div>
-              <div class="field"><span class="label">Employee ID:</span> ${employee.employeeId}</div>
-              <div class="field"><span class="label">Date of Birth:</span> ${employee.dateOfBirth || '________________'}</div>
-              <div class="field"><span class="label">Gender:</span> ________________</div>
-              <div class="field"><span class="label">Marital Status:</span> ________________</div>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Family Details</div>
-              <table class="family-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Relationship</th>
-                    <th>Date of Birth</th>
-                    <th>Address</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${employee.fatherName ? `<tr><td>${employee.fatherName}</td><td>Father</td><td>________________</td><td>________________</td></tr>` : ''}
-                  ${employee.motherName ? `<tr><td>${employee.motherName}</td><td>Mother</td><td>________________</td><td>________________</td></tr>` : ''}
-                  ${employee.spouseName ? `<tr><td>${employee.spouseName}</td><td>Spouse</td><td>________________</td><td>________________</td></tr>` : ''}
-                  ${employee.numberOfChildren ? Array(parseInt(employee.numberOfChildren) || 0).fill(0).map((_, i) => 
-                    `<tr><td>________________</td><td>Child ${i + 1}</td><td>________________</td><td>________________</td></tr>`
-                  ).join('') : ''}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="section">
-              <div class="section-title">Nominee for Dependants Benefit</div>
-              <div class="field"><span class="label">Nominee Name:</span> ${employee.nomineeName || '________________'}</div>
-              <div class="field"><span class="label">Relationship:</span> ${employee.nomineeRelation || '________________'}</div>
-              <div class="field"><span class="label">Address:</span> ________________</div>
-            </div>
-
-            <div class="signature-area">
-              <div class="field">
-                <span class="label">Employee Signature:</span> ________________
-              </div>
-              <div class="field">
-                <span class="label">Date:</span> ________________
-              </div>
-              <div class="field">
-                <span class="label">Employer Signature:</span> ________________
-              </div>
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => {
-                window.close();
-              }, 1000);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    toast.success(`ESIC Form generated for ${employee.name}`);
   };
 
   return (
@@ -860,6 +980,520 @@ const OnboardingTab = ({
         </div>
       )}
 
+      {/* EPF Form 11 Modal */}
+      {showEPFForm11 && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white z-10">
+              <h3 className="text-lg font-semibold">EPF Form 11 - Declaration Form</h3>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveEPFForm} className="flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
+                <Button onClick={handlePrintEPFForm} variant="outline" className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Print
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowEPFForm11(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Header */}
+              <div className="text-center border-b-2 border-black pb-4">
+                <h2 className="text-xl font-bold">New Form : 11 - Declaration Form</h2>
+                <p className="text-sm">(To be retained by the employer for future reference)</p>
+                <p className="text-xs font-semibold">EMPLOYEES' PROVIDENT FUND ORGANISATION</p>
+                <p className="text-xs">Employees' Provident Fund Scheme, 1952 (Paragraph 34 & 57) and Employees' Pension Scheme, 1995 (Paragraph 24)</p>
+                <p className="text-xs">(Declaration by a person taking up Employment in any Establishment on which EPF Scheme, 1952 and for EPS, 1995 is applicable)</p>
+              </div>
+
+              {/* Section 1-6 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField label="1. Name of Member (Aadhar Name)" required>
+                  <Input
+                    value={epfFormData.memberName}
+                    onChange={(e) => handleEPFFormChange('memberName', e.target.value)}
+                    placeholder="Enter full name as per Aadhar"
+                  />
+                </FormField>
+
+                <div className="space-y-2">
+                  <Label>2. Father's Name / Spouse's Name</Label>
+                  <div className="flex gap-4 mb-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="relationshipType"
+                        checked={epfFormData.relationshipType === 'father'}
+                        onChange={() => handleEPFFormChange('relationshipType', 'father')}
+                      />
+                      <Label>Father's Name</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="relationshipType"
+                        checked={epfFormData.relationshipType === 'spouse'}
+                        onChange={() => handleEPFFormChange('relationshipType', 'spouse')}
+                      />
+                      <Label>Spouse's Name</Label>
+                    </div>
+                  </div>
+                  <Input
+                    value={epfFormData.fatherOrSpouseName}
+                    onChange={(e) => handleEPFFormChange('fatherOrSpouseName', e.target.value)}
+                    placeholder={`Enter ${epfFormData.relationshipType === 'father' ? 'father' : 'spouse'} name`}
+                  />
+                </div>
+
+                <FormField label="3. Date of Birth">
+                  <Input
+                    type="date"
+                    value={epfFormData.dateOfBirth}
+                    onChange={(e) => handleEPFFormChange('dateOfBirth', e.target.value)}
+                  />
+                </FormField>
+
+                <FormField label="4. Gender">
+                  <Select value={epfFormData.gender} onValueChange={(value) => handleEPFFormChange('gender', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Transgender">Transgender</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                <FormField label="5. Marital Status">
+                  <Select value={epfFormData.maritalStatus} onValueChange={(value) => handleEPFFormChange('maritalStatus', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select marital status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Single">Single</SelectItem>
+                      <SelectItem value="Married">Married</SelectItem>
+                      <SelectItem value="Widow">Widow</SelectItem>
+                      <SelectItem value="Widower">Widower</SelectItem>
+                      <SelectItem value="Divorcee">Divorcee</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                <FormField label="6. (a) Email ID">
+                  <Input
+                    type="email"
+                    value={epfFormData.email}
+                    onChange={(e) => handleEPFFormChange('email', e.target.value)}
+                    placeholder="Enter email address"
+                  />
+                </FormField>
+
+                <FormField label="6. (b) Mobile No (Aadhar Registered)">
+                  <Input
+                    value={epfFormData.mobileNumber}
+                    onChange={(e) => handleEPFFormChange('mobileNumber', e.target.value)}
+                    placeholder="Enter mobile number"
+                  />
+                </FormField>
+              </div>
+
+              {/* Section 7-8 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg">
+                <div className="space-y-2">
+                  <Label>7. Whether earlier member of the Employee's Provident Fund Scheme, 1952 ?</Label>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={epfFormData.previousEPFMember}
+                        onChange={(e) => handleEPFFormChange('previousEPFMember', e.target.checked)}
+                      />
+                      <Label>Yes</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!epfFormData.previousEPFMember}
+                        onChange={(e) => handleEPFFormChange('previousEPFMember', !e.target.checked)}
+                      />
+                      <Label>No</Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>8. Whether earlier member of the Employee's Pension Scheme, 1995 ?</Label>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={epfFormData.previousPensionMember}
+                        onChange={(e) => handleEPFFormChange('previousPensionMember', e.target.checked)}
+                      />
+                      <Label>Yes</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!epfFormData.previousPensionMember}
+                        onChange={(e) => handleEPFFormChange('previousPensionMember', !e.target.checked)}
+                      />
+                      <Label>No</Label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 9 - Previous Employment */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <h4 className="font-semibold">9. Previous Employment details ? (If Yes, 7 & 8 details above)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField label="a) Universal Account Number (UAN)">
+                    <Input
+                      value={epfFormData.previousUAN}
+                      onChange={(e) => handleEPFFormChange('previousUAN', e.target.value)}
+                      placeholder="Enter previous UAN"
+                    />
+                  </FormField>
+                  <FormField label="b) Previous PF Account Number">
+                    <Input
+                      value={epfFormData.previousPFAccountNumber}
+                      onChange={(e) => handleEPFFormChange('previousPFAccountNumber', e.target.value)}
+                      placeholder="Enter previous PF account number"
+                    />
+                  </FormField>
+                  <FormField label="c) Date of Exit from previous Employment">
+                    <Input
+                      type="date"
+                      value={epfFormData.dateOfExit}
+                      onChange={(e) => handleEPFFormChange('dateOfExit', e.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="d) Scheme Certificate No (If issued)">
+                    <Input
+                      value={epfFormData.schemeCertificateNumber}
+                      onChange={(e) => handleEPFFormChange('schemeCertificateNumber', e.target.value)}
+                      placeholder="Enter scheme certificate number"
+                    />
+                  </FormField>
+                  <FormField label="e) Pension Payment Order (PPO) (If issued)">
+                    <Input
+                      value={epfFormData.pensionPaymentOrder}
+                      onChange={(e) => handleEPFFormChange('pensionPaymentOrder', e.target.value)}
+                      placeholder="Enter PPO number"
+                    />
+                  </FormField>
+                </div>
+              </div>
+
+              {/* Section 10 - International Worker */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <h4 className="font-semibold">10. International Worker Details</h4>
+                <div className="space-y-2">
+                  <Label>a) International Worker</Label>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={epfFormData.internationalWorker}
+                        onChange={(e) => handleEPFFormChange('internationalWorker', e.target.checked)}
+                      />
+                      <Label>Yes</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!epfFormData.internationalWorker}
+                        onChange={(e) => handleEPFFormChange('internationalWorker', !e.target.checked)}
+                      />
+                      <Label>No</Label>
+                    </div>
+                  </div>
+                </div>
+
+                {epfFormData.internationalWorker && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <FormField label="b) Country of origin">
+                      <Input
+                        value={epfFormData.countryOfOrigin}
+                        onChange={(e) => handleEPFFormChange('countryOfOrigin', e.target.value)}
+                        placeholder="Enter country name"
+                      />
+                    </FormField>
+                    <FormField label="c) Passport No.">
+                      <Input
+                        value={epfFormData.passportNumber}
+                        onChange={(e) => handleEPFFormChange('passportNumber', e.target.value)}
+                        placeholder="Enter passport number"
+                      />
+                    </FormField>
+                    <FormField label="d) Passport Validity From">
+                      <Input
+                        type="date"
+                        value={epfFormData.passportValidityFrom}
+                        onChange={(e) => handleEPFFormChange('passportValidityFrom', e.target.value)}
+                      />
+                    </FormField>
+                    <FormField label="d) Passport Validity To">
+                      <Input
+                        type="date"
+                        value={epfFormData.passportValidityTo}
+                        onChange={(e) => handleEPFFormChange('passportValidityTo', e.target.value)}
+                      />
+                    </FormField>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 11 - KYC Details */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <h4 className="font-semibold">11. KYC Details : (attach self attested copies of following KYC's)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField label="a) Bank Account No. & IFSC Code">
+                    <Input
+                      value={epfFormData.bankAccountNumber}
+                      onChange={(e) => handleEPFFormChange('bankAccountNumber', e.target.value)}
+                      placeholder="Enter bank account number"
+                    />
+                  </FormField>
+                  <FormField label="IFSC Code">
+                    <Input
+                      value={epfFormData.ifscCode}
+                      onChange={(e) => handleEPFFormChange('ifscCode', e.target.value)}
+                      placeholder="Enter IFSC code"
+                    />
+                  </FormField>
+                  <FormField label="b) AADHAR Number" required>
+                    <Input
+                      value={epfFormData.aadharNumber}
+                      onChange={(e) => handleEPFFormChange('aadharNumber', e.target.value)}
+                      placeholder="Enter Aadhar number"
+                      required
+                    />
+                  </FormField>
+                  <FormField label="c) Permanent Account Number (PAN)">
+                    <Input
+                      value={epfFormData.panNumber}
+                      onChange={(e) => handleEPFFormChange('panNumber', e.target.value)}
+                      placeholder="Enter PAN number"
+                    />
+                  </FormField>
+                </div>
+              </div>
+
+              {/* Section 12 - Declaration Details */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <h4 className="font-semibold">12. Declaration Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>First EPF Member</Label>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={epfFormData.firstEPFMember}
+                          onChange={(e) => handleEPFFormChange('firstEPFMember', e.target.checked)}
+                        />
+                        <Label>Yes</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!epfFormData.firstEPFMember}
+                          onChange={(e) => handleEPFFormChange('firstEPFMember', !e.target.checked)}
+                        />
+                        <Label>No</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <FormField label="Enrolled Date">
+                    <Input
+                      type="date"
+                      value={epfFormData.enrolledDate}
+                      onChange={(e) => handleEPFFormChange('enrolledDate', e.target.value)}
+                    />
+                  </FormField>
+
+                  <FormField label="First Employment EPF Wages">
+                    <Input
+                      value={epfFormData.firstEmploymentWages}
+                      onChange={(e) => handleEPFFormChange('firstEmploymentWages', e.target.value)}
+                      placeholder="Enter wages"
+                    />
+                  </FormField>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">EPF Member before 01/09/2014</Label>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={epfFormData.epfMemberBeforeSep2014}
+                          onChange={(e) => handleEPFFormChange('epfMemberBeforeSep2014', e.target.checked)}
+                        />
+                        <Label>Yes</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!epfFormData.epfMemberBeforeSep2014}
+                          onChange={(e) => handleEPFFormChange('epfMemberBeforeSep2014', !e.target.checked)}
+                        />
+                        <Label>No</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm">EPF Amount Withdrawn?</Label>
+                    <div className="flex gap=4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={epfFormData.epfAmountWithdrawn}
+                          onChange={(e) => handleEPFFormChange('epfAmountWithdrawn', e.target.checked)}
+                        />
+                        <Label>Yes</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!epfFormData.epfAmountWithdrawn}
+                          onChange={(e) => handleEPFFormChange('epfAmountWithdrawn', !e.target.checked)}
+                        />
+                        <Label>No</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm">EPS Amount Withdrawn?</Label>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={epfFormData.epsAmountWithdrawn}
+                          onChange={(e) => handleEPFFormChange('epsAmountWithdrawn', e.target.checked)}
+                        />
+                        <Label>Yes</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!epfFormData.epsAmountWithdrawn}
+                          onChange={(e) => handleEPFFormChange('epsAmountWithdrawn', !e.target.checked)}
+                        />
+                        <Label>No</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm">EPS Amount Withdrawn after Sep 2014?</Label>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={epfFormData.epsAmountWithdrawnAfterSep2014}
+                          onChange={(e) => handleEPFFormChange('epsAmountWithdrawnAfterSep2014', e.target.checked)}
+                        />
+                        <Label>Yes</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!epfFormData.epsAmountWithdrawnAfterSep2014}
+                          onChange={(e) => handleEPFFormChange('epsAmountWithdrawnAfterSep2014', !e.target.checked)}
+                        />
+                        <Label>No</Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Undertaking */}
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <h4 className="font-semibold mb-2">UNDERTAKING</h4>
+                <p className="text-sm">1) Certified that the particulars are true to the best of my knowledge</p>
+                <p className="text-sm">2) I authorise EPFO to use my Aadhar for verification / authentication / eKYC purpose for service delivery</p>
+                <p className="text-sm">3) Kindly transfer the fund and service details, if applicable, from the previous PF account as declared above to the present PF account.</p>
+                <p className="text-sm">(The transfer would be possible only if the identified KYC details approved by previous employer has been verified by present employer using his Digital Signature</p>
+                <p className="text-sm">4) In case of changes in above details, the same will be intimated to employer at the earliest.</p>
+              </div>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg">
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Employee Declaration</h4>
+                  <FormField label="Date">
+                    <Input
+                      type="date"
+                      value={epfFormData.declarationDate}
+                      onChange={(e) => handleEPFFormChange('declarationDate', e.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="Place">
+                    <Input
+                      value={epfFormData.declarationPlace}
+                      onChange={(e) => handleEPFFormChange('declarationPlace', e.target.value)}
+                      placeholder="Enter place"
+                    />
+                  </FormField>
+                  <FormField label="Signature of Member">
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center h-20 flex items-center justify-center">
+                      <span className="text-muted-foreground">Employee Signature</span>
+                    </div>
+                  </FormField>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Employer Declaration</h4>
+                  <FormField label="Date">
+                    <Input
+                      type="date"
+                      value={epfFormData.employerDeclarationDate}
+                      onChange={(e) => handleEPFFormChange('employerDeclarationDate', e.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="Signature of Employer with Seal">
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center h-20 flex items-center justify-center">
+                      <span className="text-muted-foreground">Employer Signature & Seal</span>
+                    </div>
+                  </FormField>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 justify-end pt-4 border-t">
+                <Button onClick={handleSaveEPFForm} className="flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  Save Form
+                </Button>
+                <Button onClick={handlePrintEPFForm} variant="outline" className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Print Form
+                </Button>
+                <Button variant="outline" onClick={() => setShowEPFForm11(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
       <Card>
         <CardHeader>
           <CardTitle>Digital Onboarding & Document Verification</CardTitle>
@@ -1035,6 +1669,36 @@ const OnboardingTab = ({
                     onChange={(e) => setNewEmployee({...newEmployee, aadharNumber: e.target.value})}
                     placeholder="Enter Aadhar number"
                     required
+                  />
+                </FormField>
+
+                {/* New Fields: PAN, ESIC, UAN */}
+                <FormField label="PAN Number" id="panNumber">
+                  <Input
+                    id="panNumber"
+                    value={newEmployee.panNumber}
+                    onChange={(e) => setNewEmployee({...newEmployee, panNumber: e.target.value})}
+                    placeholder="Enter PAN number"
+                    maxLength={10}
+                    className="uppercase"
+                  />
+                </FormField>
+
+                <FormField label="ESIC Number" id="esicNumber">
+                  <Input
+                    id="esicNumber"
+                    value={newEmployee.esicNumber}
+                    onChange={(e) => setNewEmployee({...newEmployee, esicNumber: e.target.value})}
+                    placeholder="Enter ESIC number"
+                  />
+                </FormField>
+
+                <FormField label="PF Number / UAN" id="uanNumber">
+                  <Input
+                    id="uanNumber"
+                    value={newEmployee.uanNumber}
+                    onChange={(e) => setNewEmployee({...newEmployee, uanNumber: e.target.value})}
+                    placeholder="Enter PF number or UAN"
                   />
                 </FormField>
               </div>
@@ -1478,6 +2142,7 @@ const OnboardingTab = ({
                   <div>• Bank Details</div>
                   <div>• Passport Size Photo</div>
                   <div>• ESIC Family Details</div>
+                  <div>• PF/ESIC Documents</div>
                 </div>
               </div>
             </div>
@@ -1486,117 +2151,6 @@ const OnboardingTab = ({
               <Plus className="mr-2 h-4 w-4" />
               Add Employee
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Employee List Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee List</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {employees.map((employee) => (
-              <div key={employee.id} className="border rounded-lg p-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    {employee.photo ? (
-                      <img 
-                        src={URL.createObjectURL(employee.photo)} 
-                        alt={employee.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                        <FileText className="h-6 w-6 text-gray-400" />
-                      </div>
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-semibold">{employee.name}</h4>
-                        {employee.status === "left" && (
-                          <Badge variant="destructive">Left</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{employee.employeeId} • {employee.department}</p>
-                      <p className="text-sm text-muted-foreground">{employee.position}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => generateIDCard(employee)}
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      View ID
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => downloadIDCard(employee)}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      ID Card
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => downloadNomineeForm(employee)}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      Nominee Form
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => downloadPFForm(employee)}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      PF Form
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => downloadESICForm(employee)}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      ESIC Form
-                    </Button>
-                    
-                    {employee.status !== "left" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleMarkAsLeft(employee)}
-                      >
-                        Mark as Left
-                      </Button>
-                    )}
-                    
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDeleteEmployee(employee)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            {employees.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No employees found. Add your first employee above.
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

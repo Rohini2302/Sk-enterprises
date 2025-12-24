@@ -14,6 +14,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("superadmin");
+  const [loading, setLoading] = useState(false);
   const { login } = useRole();
   const navigate = useNavigate();
 
@@ -24,6 +25,8 @@ const Login = () => {
       toast.error("Please fill in all fields");
       return;
     }
+
+    setLoading(true);
 
     try {
       await login(email, password, selectedRole);
@@ -49,8 +52,10 @@ const Login = () => {
         default:
           navigate("/");
       }
-    } catch (error) {
-      toast.error("Login failed. Please try again.");
+    } catch (error: any) {
+      toast.error(error.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,7 +79,11 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">Select Role</Label>
-                <Select value={selectedRole || ""} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+                <Select 
+                  value={selectedRole || ""} 
+                  onValueChange={(value) => setSelectedRole(value as UserRole)}
+                  disabled={loading}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
@@ -100,6 +109,7 @@ const Login = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -116,12 +126,13 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Signing In..." : "Sign In"}
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">

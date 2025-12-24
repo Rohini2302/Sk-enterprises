@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/shared/DashboardHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,9 @@ import {
   LogIn,
   LogOut,
   Coffee,
-  Timer
+  Timer,
+  UserCheck,
+  ClipboardCheck
 } from "lucide-react";
 
 // Define types for the data
@@ -170,6 +172,7 @@ const generateMockTasks = (): Task[] => [
 
 const SupervisorDashboard = () => {
   const { onMenuClick } = useOutletContext<OutletContext>();
+  const navigate = useNavigate();
   
   // State for data with proper types
   const [stats, setStats] = useState<DashboardStats>({
@@ -380,7 +383,8 @@ const SupervisorDashboard = () => {
       manageEmployees: () => window.location.href = '/supervisor/employees',
       viewTask: (id?: string) => window.location.href = `/supervisor/tasks/${id}`,
       viewEmployee: (id?: string) => window.location.href = `/supervisor/employees/${id}`,
-      viewAttendance: () => window.location.href = '/supervisor/attendance'
+      viewAttendance: () => navigate('/supervisor/attendance'),
+      taskManagement: () => navigate('/supervisor/tasks')
     };
     
     if (actions[action]) {
@@ -458,13 +462,31 @@ const SupervisorDashboard = () => {
       />
 
       <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
+        {/* Header with Shortcut Buttons */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Overview</h2>
-          <Button onClick={loadData} variant="outline" className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => handleAction('viewAttendance')}
+                className="flex-1 sm:flex-none flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                <UserCheck className="h-4 w-4" />
+                Employee Attendance
+              </Button>
+              <Button 
+                onClick={() => handleAction('taskManagement')}
+                className="flex-1 sm:flex-none flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                Task Management
+              </Button>
+            </div>
+            <Button onClick={loadData} variant="outline" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Attendance Controls */}

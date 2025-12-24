@@ -1,554 +1,237 @@
 import { useOutletContext } from "react-router-dom";
 import { DashboardHeader } from "@/components/shared/DashboardHeader";
-import { StatCard } from "@/components/shared/StatCard";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { motion } from "framer-motion";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { 
-  Users, 
-  Shield, 
-  Building2, 
-  Briefcase, 
-  AlertCircle, 
-  CheckCircle2, 
-  X, 
-  Plus, 
-  Search, 
-  Download, 
-  Filter, 
-  Calendar, 
-  Clock, 
-  Wrench, 
-  DollarSign, 
-  UserCheck, 
-  CalendarDays, 
-  BarChart3, 
-  Users as UsersIcon, 
-  HardHat, 
-  Truck, 
-  ArrowUpDown, 
-  FileText,
-  Settings,
-  Hammer,
-  Package,
+  PieChart as PieChartIcon,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
+  Calendar,
   Home,
-  Key,
+  Shield,
   Car,
   Trash2,
   Droplets,
   ShoppingCart,
-  RefreshCw,
-  Send,
-  Upload
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion } from "framer-motion";
-import { useState } from "react";
-import { toast } from "sonner";
+  DollarSign,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Search,
+  List,
+  PieChart,
+  ChevronsLeft,
+  ChevronsRight,
+  Download,
+  FileText,
+  Receipt,
+  AlertTriangle,
+  Users,
+  Building2,
+  Briefcase
+} from 'lucide-react';
 
-// Indian names dummy data
-const indianNames = {
-  male: ["Rajesh Kumar", "Amit Sharma", "Sanjay Patel", "Vikram Singh", "Arun Reddy", "Mohan Das", "Suresh Iyer", "Prakash Joshi", "Deepak Mehta", "Kiran Nair"],
-  female: ["Priya Sharma", "Anjali Singh", "Sunita Reddy", "Kavita Patel", "Meera Iyer", "Laxmi Kumar", "Sonia Das", "Neha Joshi", "Pooja Mehta", "Ritu Nair"],
-  sites: [
-    "ALYSSUM DEVELOPERS PVT. LTD.",
-    "ARYA ASSOCIATES",
-    "ASTITVA ASSET MANAGEMENT LLP",
-    "A.T.C COMMERCIAL PREMISES CO. OPERATIVE SOCIETY LTD",
-    "BAHIRAT ESTATE LLP",
-    "CHITRALI PROPERTIES PVT LTD",
-    "Concretely Infra Llp",
-    "COORTUS ADVISORS LLP",
-    "CUSHMAN & WAKEFIELD PROPERTY MANAGEMENT SERVICES INDIA PVT. LTD.",
-    "DAKSHA INFRASTRUCTURE PVT. LTD."
-  ],
-  departments: [
-    "Housekeeping", 
-    "Security", 
-    "Parking", 
-    "Waste Management", 
-    "STP Tank Cleaning", 
-    "Consumables"
-  ],
-  machinery: [
-    "Floor Scrubber", "Vacuum Cleaner", "Pressure Washer", "Security Vehicle", "Parking Barrier", "Waste Compactor",
-    "Sewage Pump", "Water Treatment Plant", "Generator", "Air Compressor", "Cleaning Cart", "Surveillance System"
-  ],
-  parties: ["ABC Construction", "XYZ Builders", "Modern Constructions", "Elite Developers", "Prime Infrastructure", "Metro Builders"]
+// Recharts for charts
+import {
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+
+// Chart color constants
+const CHART_COLORS = {
+  present: '#10b981',
+  absent: '#ef4444',
+  late: '#f59e0b',
+  payroll: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444']
 };
 
-// Extended dummy data with detailed reports for Admin
-const extendedDummyData = {
-  dashboardStats: {
-    admin: {
-      totalManagers: 6,
-      totalSupervisors: 15,
-      totalEmployees: 120,
-      totalSites: 10,
-      activeTasks: 18,
-      pendingLeaves: 12,
-      presentToday: 98,
-      absentToday: 22,
-      activeMachinery: 25,
-      totalDebtors: 4,
-      todayAttendance: "81.7%",
-      machineryUnderMaintenance: 3,
-      totalOutstanding: 850000
-    }
-  },
-
-  // Attendance Data
-  attendanceReports: [
-    {
-      id: '1',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      totalEmployees: 18,
-      present: 15,
-      absent: 3,
-      lateArrivals: 2,
-      earlyDepartures: 1,
-      attendanceRate: '83.3%',
-      shortage: 3,
-      departmentBreakdown: [
-        { department: 'Housekeeping', present: 5, total: 6, rate: '83.3%' },
-        { department: 'Security', present: 3, total: 3, rate: '100%' },
-        { department: 'Parking', present: 2, total: 2, rate: '100%' },
-        { department: 'Waste Management', present: 3, total: 4, rate: '75.0%' },
-        { department: 'STP Tank Cleaning', present: 1, total: 2, rate: '50.0%' },
-        { department: 'Consumables', present: 1, total: 1, rate: '100%' }
-      ]
-    },
-    {
-      id: '2',
-      site: 'ARYA ASSOCIATES',
-      date: '2024-01-15',
-      totalEmployees: 15,
-      present: 13,
-      absent: 2,
-      lateArrivals: 1,
-      earlyDepartures: 0,
-      attendanceRate: '86.7%',
-      shortage: 2,
-      departmentBreakdown: [
-        { department: 'Housekeeping', present: 4, total: 5, rate: '80.0%' },
-        { department: 'Security', present: 3, total: 3, rate: '100%' },
-        { department: 'Parking', present: 2, total: 2, rate: '100%' },
-        { department: 'Waste Management', present: 2, total: 2, rate: '100%' },
-        { department: 'STP Tank Cleaning', present: 1, total: 2, rate: '50.0%' },
-        { department: 'Consumables', present: 1, total: 1, rate: '100%' }
-      ]
-    },
-    {
-      id: '3',
-      site: 'ASTITVA ASSET MANAGEMENT LLP',
-      date: '2024-01-15',
-      totalEmployees: 16,
-      present: 14,
-      absent: 2,
-      lateArrivals: 1,
-      earlyDepartures: 1,
-      attendanceRate: '87.5%',
-      shortage: 2,
-      departmentBreakdown: [
-        { department: 'Housekeeping', present: 5, total: 6, rate: '83.3%' },
-        { department: 'Security', present: 3, total: 3, rate: '100%' },
-        { department: 'Parking', present: 2, total: 2, rate: '100%' },
-        { department: 'Waste Management', present: 2, total: 2, rate: '100%' },
-        { department: 'STP Tank Cleaning', present: 1, total: 2, rate: '50.0%' },
-        { department: 'Consumables', present: 1, total: 1, rate: '100%' }
-      ]
-    }
-  ],
-
-  // Employee-wise attendance data
-  employeeAttendance: [
-    {
-      id: '1',
-      employeeId: 'EMP001',
-      name: 'Rajesh Kumar',
-      department: 'Housekeeping',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      checkIn: '08:30 AM',
-      checkOut: '05:30 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '9h 0m',
-      overtime: '0 mins'
-    },
-    {
-      id: '2',
-      employeeId: 'EMP002',
-      name: 'Priya Sharma',
-      department: 'Security',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      checkIn: '08:00 AM',
-      checkOut: '08:00 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '12h 0m',
-      overtime: '4h 0m'
-    },
-    {
-      id: '3',
-      employeeId: 'EMP003',
-      name: 'Amit Sharma',
-      department: 'Parking',
-      site: 'ARYA ASSOCIATES',
-      date: '2024-01-15',
-      checkIn: '07:45 AM',
-      checkOut: '04:45 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '9h 0m',
-      overtime: '0 mins'
-    },
-    {
-      id: '4',
-      employeeId: 'EMP004',
-      name: 'Sanjay Patel',
-      department: 'Waste Management',
-      site: 'ASTITVA ASSET MANAGEMENT LLP',
-      date: '2024-01-15',
-      checkIn: '08:15 AM',
-      checkOut: '05:15 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '9h 0m',
-      overtime: '0 mins'
-    },
-    {
-      id: '5',
-      employeeId: 'EMP005',
-      name: 'Anjali Singh',
-      department: 'STP Tank Cleaning',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      checkIn: '08:45 AM',
-      checkOut: '05:45 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '9h 0m',
-      overtime: '0 mins'
-    },
-    {
-      id: '6',
-      employeeId: 'EMP006',
-      name: 'Vikram Singh',
-      department: 'Consumables',
-      site: 'ARYA ASSOCIATES',
-      date: '2024-01-15',
-      checkIn: '09:05 AM',
-      checkOut: '06:05 PM',
-      status: 'present',
-      lateBy: '5 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '9h 0m',
-      overtime: '0 mins'
-    },
-    {
-      id: '7',
-      employeeId: 'EMP007',
-      name: 'Sunita Reddy',
-      department: 'Housekeeping',
-      site: 'ASTITVA ASSET MANAGEMENT LLP',
-      date: '2024-01-15',
-      checkIn: '08:35 AM',
-      checkOut: '05:25 PM',
-      status: 'present',
-      lateBy: '5 mins',
-      earlyDeparture: '5 mins',
-      totalHours: '8h 50m',
-      overtime: '0 mins'
-    },
-    {
-      id: '8',
-      employeeId: 'EMP008',
-      name: 'Kiran Nair',
-      department: 'Security',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      checkIn: '08:00 AM',
-      checkOut: '08:00 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '0 mins',
-      totalHours: '12h 0m',
-      overtime: '4h 0m'
-    },
-    {
-      id: '9',
-      employeeId: 'EMP009',
-      name: 'Mohan Das',
-      department: 'Parking',
-      site: 'ARYA ASSOCIATES',
-      date: '2024-01-15',
-      checkIn: '07:50 AM',
-      checkOut: '04:40 PM',
-      status: 'present',
-      lateBy: '0 mins',
-      earlyDeparture: '20 mins',
-      totalHours: '8h 50m',
-      overtime: '0 mins'
-    },
-    {
-      id: '10',
-      employeeId: 'EMP010',
-      name: 'Suresh Iyer',
-      department: 'Waste Management',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      date: '2024-01-15',
-      checkIn: '-',
-      checkOut: '-',
-      status: 'absent',
-      lateBy: '-',
-      earlyDeparture: '-',
-      totalHours: '0h',
-      overtime: '0 mins'
-    }
-  ],
-
-  // Daily summary data
-  dailySummary: {
-    date: '2024-01-15',
-    totalEmployees: 120,
-    present: 98,
-    absent: 22,
-    lateArrivals: 8,
-    halfDays: 3,
-    earlyDepartures: 4,
-    overallAttendance: '81.7%',
-    siteWiseSummary: [
-      { site: 'ALYSSUM DEVELOPERS PVT. LTD.', present: 15, total: 18, rate: '83.3%' },
-      { site: 'ARYA ASSOCIATES', present: 13, total: 15, rate: '86.7%' },
-      { site: 'ASTITVA ASSET MANAGEMENT LLP', present: 14, total: 16, rate: '87.5%' },
-      { site: 'A.T.C COMMERCIAL PREMISES CO. OPERATIVE SOCIETY LTD', present: 12, total: 14, rate: '85.7%' },
-      { site: 'BAHIRAT ESTATE LLP', present: 11, total: 12, rate: '91.7%' }
-    ],
-    departmentWiseSummary: [
-      { department: 'Housekeeping', present: 32, total: 38, rate: '84.2%' },
-      { department: 'Security', present: 20, total: 20, rate: '100%' },
-      { department: 'Parking', present: 14, total: 14, rate: '100%' },
-      { department: 'Waste Management', present: 16, total: 18, rate: '88.9%' },
-      { department: 'STP Tank Cleaning', present: 10, total: 16, rate: '62.5%' },
-      { department: 'Consumables', present: 6, total: 6, rate: '100%' }
-    ]
-  },
-
-  // Site Machinery Reports Data
-  machineryReports: [
-    {
-      id: '1',
-      machineryId: 'MACH001',
-      name: 'Industrial Floor Scrubber',
-      type: 'Floor Scrubber',
-      model: 'Tennant T7',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      status: 'active',
-      lastMaintenance: '2024-01-10',
-      nextMaintenance: '2024-02-10',
-      operator: 'Rajesh Kumar',
-      operatorPhone: '9876543210',
-      purchaseDate: '2023-05-15',
-      warrantyUntil: '2025-05-15',
-      hoursOperated: 450,
-      fuelConsumption: 'Electric',
-      remarks: 'Excellent condition. Daily cleaning operations ongoing.',
-      maintenanceHistory: [
-        { date: '2024-01-10', type: 'Routine', cost: 8000, technician: 'Technical Team A' },
-        { date: '2023-12-15', type: 'Brush Replacement', cost: 5000, technician: 'Technical Team B' }
-      ]
-    },
-    {
-      id: '2',
-      machineryId: 'MACH002',
-      name: 'Commercial Vacuum Cleaner',
-      type: 'Vacuum Cleaner',
-      model: 'Karcher B 40',
-      site: 'ARYA ASSOCIATES',
-      status: 'active',
-      lastMaintenance: '2024-01-08',
-      nextMaintenance: '2024-02-08',
-      operator: 'Sunita Reddy',
-      operatorPhone: '9876543211',
-      purchaseDate: '2023-06-20',
-      warrantyUntil: '2025-06-20',
-      hoursOperated: 320,
-      fuelConsumption: 'Electric',
-      remarks: 'Good working condition. Regular filter changes done.',
-      maintenanceHistory: [
-        { date: '2024-01-08', type: 'Filter Replacement', cost: 3000, technician: 'Technical Team A' }
-      ]
-    },
-    {
-      id: '3',
-      machineryId: 'MACH003',
-      name: 'Security Patrol Vehicle',
-      type: 'Security Vehicle',
-      model: 'Mahindra Bolero',
-      site: 'ASTITVA ASSET MANAGEMENT LLP',
-      status: 'active',
-      lastMaintenance: '2024-01-12',
-      nextMaintenance: '2024-02-12',
-      operator: 'Priya Sharma',
-      operatorPhone: '9876543212',
-      purchaseDate: '2023-07-10',
-      warrantyUntil: '2025-07-10',
-      hoursOperated: 1250,
-      fuelConsumption: '12km/l',
-      remarks: 'Patrol vehicle in good condition. Regular security rounds ongoing.',
-      maintenanceHistory: [
-        { date: '2024-01-12', type: 'Routine Service', cost: 8500, technician: 'Technical Team B' }
-      ]
-    },
-    {
-      id: '4',
-      machineryId: 'MACH004',
-      name: 'Automatic Parking Barrier',
-      type: 'Parking Barrier',
-      model: 'FAAC XT4',
-      site: 'A.T.C COMMERCIAL PREMISES CO. OPERATIVE SOCIETY LTD',
-      status: 'maintenance',
-      lastMaintenance: '2024-01-13',
-      nextMaintenance: '2024-01-25',
-      operator: 'Amit Sharma',
-      operatorPhone: '9876543213',
-      purchaseDate: '2023-08-15',
-      warrantyUntil: '2025-08-15',
-      hoursOperated: 2890,
-      fuelConsumption: 'Electric',
-      remarks: 'Motor replacement in progress. Expected completion in 2 days.',
-      maintenanceHistory: [
-        { date: '2024-01-13', type: 'Motor Repair', cost: 12000, technician: 'Technical Team C' }
-      ]
-    },
-    {
-      id: '5',
-      machineryId: 'MACH005',
-      name: 'Waste Compactor Truck',
-      type: 'Waste Compactor',
-      model: 'Tata Ace HT',
-      site: 'ALYSSUM DEVELOPERS PVT. LTD.',
-      status: 'active',
-      lastMaintenance: '2024-01-09',
-      nextMaintenance: '2024-02-09',
-      operator: 'Sanjay Patel',
-      operatorPhone: '9876543214',
-      purchaseDate: '2023-09-05',
-      warrantyUntil: '2025-09-05',
-      hoursOperated: 980,
-      fuelConsumption: '10km/l',
-      remarks: 'Efficient waste collection. Regular compaction operations.',
-      maintenanceHistory: [
-        { date: '2024-01-09', type: 'Routine', cost: 11000, technician: 'Technical Team A' }
-      ]
-    }
-  ],
-
-  // Outstanding Debtors Reports Data
-  debtorReports: [
-    {
-      id: '1',
-      partyId: 'PARTY001',
-      partyName: 'ABC Construction',
-      contactPerson: 'Ramesh Gupta',
-      phone: '9876543210',
-      email: 'ramesh@abcconstruction.com',
-      address: '123 Business Park, Mumbai',
-      totalAmount: 450000,
-      pendingAmount: 150000,
-      lastPaymentDate: '2024-01-10',
-      lastPaymentAmount: 100000,
-      dueDate: '2024-01-30',
-      overdueDays: 0,
-      status: 'pending',
-      creditLimit: 500000,
-      paymentHistory: [
-        { date: '2024-01-10', amount: 100000, mode: 'Bank Transfer', reference: 'REF001' },
-        { date: '2023-12-15', amount: 100000, mode: 'Cheque', reference: 'REF002' },
-        { date: '2023-11-20', amount: 100000, mode: 'Bank Transfer', reference: 'REF003' }
-      ]
-    },
-    {
-      id: '2',
-      partyId: 'PARTY002',
-      partyName: 'XYZ Builders',
-      contactPerson: 'Suresh Mehta',
-      phone: '9876543211',
-      email: 'suresh@xyzbuilders.com',
-      address: '456 Corporate Tower, Delhi',
-      totalAmount: 320000,
-      pendingAmount: 120000,
-      lastPaymentDate: '2024-01-05',
-      lastPaymentAmount: 80000,
-      dueDate: '2024-01-25',
-      overdueDays: 0,
-      status: 'pending',
-      creditLimit: 400000,
-      paymentHistory: [
-        { date: '2024-01-05', amount: 80000, mode: 'UPI', reference: 'REF004' },
-        { date: '2023-12-10', amount: 80000, mode: 'Bank Transfer', reference: 'REF005' },
-        { date: '2023-11-25', amount: 80000, mode: 'Cheque', reference: 'REF006' }
-      ]
-    }
-  ],
-
-  // Recent Activities Data
-  recentActivities: [
-    {
-      id: '1',
-      user: 'Rajesh Kumar',
-      action: 'Checked in at ALYSSUM DEVELOPERS',
-      timestamp: '10 minutes ago',
-      type: 'attendance'
-    },
-    {
-      id: '2',
-      user: 'System',
-      action: 'Daily attendance report generated',
-      timestamp: '30 minutes ago',
-      type: 'system'
-    },
-    {
-      id: '3',
-      user: 'Priya Sharma',
-      action: 'Updated security logs',
-      timestamp: '1 hour ago',
-      type: 'user'
-    },
-    {
-      id: '4',
-      user: 'Admin',
-      action: 'Approved leave request - Amit Sharma',
-      timestamp: '2 hours ago',
-      type: 'approval'
-    },
-    {
-      id: '5',
-      user: 'Sanjay Patel',
-      action: 'Submitted waste management report',
-      timestamp: '3 hours ago',
-      type: 'user'
-    }
-  ]
+// Generate attendance data from today going backwards
+const generateAttendanceData = () => {
+  const data = [];
+  const today = new Date();
+  
+  // Generate data for last 30 days including today
+  for (let i = 0; i < 30; i++) {
+    const date = new Date();
+    date.setDate(today.getDate() - i);
+    
+    const dayName = i === 0 ? 'Today' : 
+                   i === 1 ? 'Yesterday' : 
+                   date.toLocaleDateString('en-US', { weekday: 'long' });
+    
+    const present = Math.floor(Math.random() * 30) + 85; // 85-115 present
+    const absent = Math.floor(Math.random() * 15) + 5; // 5-20 absent
+    const total = present + absent;
+    const rate = ((present / total) * 100).toFixed(1) + '%';
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      day: dayName,
+      present,
+      absent,
+      total,
+      rate,
+      index: i // Store original index for reference
+    });
+  }
+  
+  return data;
 };
+
+const attendanceData = generateAttendanceData();
+
+// Department View Data
+const departmentViewData = [
+  { 
+    department: 'Housekeeping', 
+    present: 56, 
+    total: 65, 
+    rate: '86.2%',
+    icon: Home
+  },
+  { 
+    department: 'Security', 
+    present: 26, 
+    total: 28, 
+    rate: '92.9%',
+    icon: Shield
+  },
+  { 
+    department: 'Parking', 
+    present: 5, 
+    total: 5, 
+    rate: '100%',
+    icon: Car
+  },
+  { 
+    department: 'Waste Management', 
+    present: 8, 
+    total: 10, 
+    rate: '80.0%',
+    icon: Trash2
+  },
+  { 
+    department: 'STP Tank Cleaning', 
+    present: 6, 
+    total: 8, 
+    rate: '75.0%',
+    icon: Droplets
+  },
+  { 
+    department: 'Consumables', 
+    present: 3, 
+    total: 3, 
+    rate: '100%',
+    icon: ShoppingCart
+  }
+];
+
+// Outstanding Amount Data
+const outstandingData = {
+  totalInvoices: 45,
+  receivedTotalAmount: 3250000,
+  totalOutstandingDue: 1850000
+};
+
+// Site Names Data
+const siteNames = [
+  'ALYSSUM DEVELOPERS PVT. LTD.',
+  'ARYA ASSOCIATES',
+  'ASTITVA ASSET MANAGEMENT LLP',
+  'A.T.C COMMERCIAL PREMISES CO. OPERATIVE SOCIETY LTD',
+  'BAHIRAT ESTATE LLP',
+  'CHITRALI PROPERTIES PVT LTD',
+  'Concretely Infra Llp',
+  'COORTUS ADVISORS LLP',
+  'CUSHMAN & WAKEFIELD PROPERTY MANAGEMENT SERVICES INDIA PVT. LTD.',
+  'DAKSHA INFRASTRUCTURE PVT. LTD.',
+  'GANRAJ HOMES LLP-GANGA IMPERIA',
+  'Global Lifestyle Hinjawadi Co-operative Housing Society Ltd',
+  'GLOBAL PROPERTIES',
+  'GLOBAL SQUARE PREMISES CO SOC LTD',
+  'ISS FACILITY SERVICES INDIA PVT LTD',
+  'JCSS CONSULTING INDIA PVT LTD',
+  'KAPPA REALTORS LLP PUNE',
+  'KRISHAK SEVITA ONLINE SOLUTIONS PRIVATE LIMITED',
+  'LA MERE BUSINESS PVT. LTD.',
+  'MATTER MOTOR WORKS PRIVATE LIMITED',
+  'MEDIA PROTOCOL SERVICES',
+  'MINDSPACE SHELTERS LLP (F2)',
+  'NEXT GEN BUSINESS CENTRE LLP',
+  'N G VENTURES',
+  'PRIME VENTURES',
+  'RADIANT INFRAPOWER',
+  'RUHRPUMPEN INDIA PVT LTD',
+  'SATURO TECHNOLOGIES PVT LTD',
+  'SHUBH LANDMARKS',
+  'SIDDHIVINAYAK POULTRY BREEDING FARM & HATCHERIES PRIVATE LIMITED',
+  'SUVARNA FMS PVT LTD',
+  'SYNERGY INFOTECH PVT LTD',
+  'VILAS JAVDEKAR ECO SHELTERS PVT. LTD',
+  'WEETAN SBRFS LLP',
+  'WESTERN INDIA FORGINGS PVT LTD'
+];
+
+// Generate payroll data for all sites
+const generatePayrollData = () => {
+  const payrollData = [];
+  
+  siteNames.forEach((siteName, index) => {
+    const billingAmount = Math.floor(Math.random() * 500000) + 200000; // 200,000 - 700,000
+    const totalPaid = Math.floor(Math.random() * billingAmount * 0.8) + (billingAmount * 0.2); // 20% - 100% of billing
+    const holdSalary = billingAmount - totalPaid;
+    
+    const remarks = [
+      'Payment processed',
+      'Pending approval',
+      'Under review',
+      'Payment scheduled',
+      'Awaiting documents',
+      'Completed',
+      'On hold'
+    ];
+    
+    payrollData.push({
+      id: index + 1,
+      siteName,
+      billingAmount,
+      totalPaid,
+      holdSalary: holdSalary > 0 ? holdSalary : 0,
+      remark: remarks[Math.floor(Math.random() * remarks.length)],
+      status: holdSalary > 0 ? 'Pending' : 'Paid'
+    });
+  });
+  
+  return payrollData;
+};
+
+// Years and Months data
+const years = ['2024', '2023', '2022', '2021'];
+const months = [
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' }
+];
 
 // Pagination Component
 const Pagination = ({ 
@@ -636,95 +319,310 @@ const Pagination = ({
   );
 };
 
+// Excel export utility function
+const exportToExcel = (data: any[], filename: string) => {
+  // Create CSV content
+  const headers = ['Site Name', 'Billing Amount (₹)', 'Total Paid (₹)', 'Hold Salary (₹)', 'Difference (₹)', 'Status', 'Remark'];
+  
+  const csvContent = [
+    headers.join(','),
+    ...data.map(item => {
+      const difference = item.billingAmount - item.totalPaid + item.holdSalary;
+      return [
+        `"${item.siteName}"`,
+        item.billingAmount,
+        item.totalPaid,
+        item.holdSalary,
+        difference,
+        item.status,
+        `"${item.remark}"`
+      ].join(',');
+    })
+  ].join('\n');
+
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+};
+
+// Stats Card Component
+const StatCard = ({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  delay = 0
+}: {
+  title: string;
+  value: number | string;
+  icon: any;
+  trend?: { value: number; isPositive: boolean };
+  delay?: number;
+}) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+    >
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">{title}</p>
+              <p className="text-2xl font-bold">{value}</p>
+              {trend && (
+                <div className={`flex items-center gap-1 mt-1 text-sm ${
+                  trend.isPositive ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  <span>{trend.isPositive ? '↑' : '↓'}</span>
+                  <span>{trend.value}%</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 bg-primary/10 rounded-full">
+              <Icon className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
 const AdminDashboard = () => {
   const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();
-  const [stats, setStats] = useState(extendedDummyData.dashboardStats.admin);
-  const [attendanceReports, setAttendanceReports] = useState(extendedDummyData.attendanceReports);
-  const [employeeAttendance, setEmployeeAttendance] = useState(extendedDummyData.employeeAttendance);
-  const [dailySummary, setDailySummary] = useState(extendedDummyData.dailySummary);
-  const [machineryReports, setMachineryReports] = useState(extendedDummyData.machineryReports);
-  const [debtorReports, setDebtorReports] = useState(extendedDummyData.debtorReports);
-  const [recentActivities, setRecentActivities] = useState(extendedDummyData.recentActivities);
+  const navigate = useNavigate();
   
-  // Pagination states
-  const [attendancePage, setAttendancePage] = useState(1);
-  const [employeePage, setEmployeePage] = useState(1);
-  const [machineryPage, setMachineryPage] = useState(1);
-  const [debtorPage, setDebtorPage] = useState(1);
-  const itemsPerPage = 5;
+  // State for pie chart navigation
+  const [currentDayIndex, setCurrentDayIndex] = useState(0); // Today is index 0
+  const [sixDaysStartIndex, setSixDaysStartIndex] = useState(1); // Start from yesterday (index 1)
+  
+  // State for payroll filters
+  const [selectedYear, setSelectedYear] = useState('2024');
+  const [selectedMonth, setSelectedMonth] = useState('01');
+  const [payrollData, setPayrollData] = useState(generatePayrollData());
+  const [payrollTab, setPayrollTab] = useState('list-view');
+  const [selectedSite, setSelectedSite] = useState(siteNames[0]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5; // 5 records per page
 
-  // Search and filter states for Attendance
-  const [attendanceSearch, setAttendanceSearch] = useState('');
-  const [employeeSearch, setEmployeeSearch] = useState('');
-  const [siteFilter, setSiteFilter] = useState('all');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [dateRange, setDateRange] = useState({
-    start: '2024-01-15',
-    end: '2024-01-15'
-  });
+  // Admin-specific stats
+  const adminStats = {
+    totalManagers: 6,
+    totalSupervisors: 15,
+    totalEmployees: 120,
+    totalSites: 10,
+    activeTasks: 18,
+    pendingLeaves: 12,
+    presentToday: 98,
+    absentToday: 22,
+    activeMachinery: 25,
+    totalDebtors: 4,
+    todayAttendance: "81.7%",
+    machineryUnderMaintenance: 3,
+    totalOutstanding: 850000
+  };
 
-  // Search and filter states for Machinery
-  const [machinerySearch, setMachinerySearch] = useState('');
-  const [machineryStatusFilter, setMachineryStatusFilter] = useState('all');
-  const [machinerySiteFilter, setMachinerySiteFilter] = useState('all');
-  const [machineryTypeFilter, setMachineryTypeFilter] = useState('all');
+  // Get current day data (Today)
+  const currentDayData = attendanceData[currentDayIndex];
+  
+  // Get 6 days data for small pie charts (starting from sixDaysStartIndex)
+  const sixDaysData = attendanceData.slice(sixDaysStartIndex, sixDaysStartIndex + 6);
 
-  // Search and filter states for Debtors
-  const [debtorSearch, setDebtorSearch] = useState('');
-  const [debtorStatusFilter, setDebtorStatusFilter] = useState('all');
+  // Prepare pie chart data for current day
+  const currentDayPieData = [
+    { name: 'Present', value: currentDayData.present, color: CHART_COLORS.present },
+    { name: 'Absent', value: currentDayData.absent, color: CHART_COLORS.absent }
+  ];
 
-  // Filter functions for Attendance
-  const filteredAttendance = attendanceReports.filter(site =>
-    site.site.toLowerCase().includes(attendanceSearch.toLowerCase())
-  );
+  // Calculate payroll summary
+  const payrollSummary = useMemo(() => {
+    const totalBilling = payrollData.reduce((sum, item) => sum + item.billingAmount, 0);
+    const totalPaid = payrollData.reduce((sum, item) => sum + item.totalPaid, 0);
+    const totalHold = payrollData.reduce((sum, item) => sum + item.holdSalary, 0);
+    const totalDifference = payrollData.reduce((sum, item) => sum + (item.billingAmount - item.totalPaid + item.holdSalary), 0);
+    
+    return {
+      totalBilling,
+      totalPaid,
+      totalHold,
+      totalDifference,
+      completionRate: ((totalPaid / totalBilling) * 100).toFixed(1)
+    };
+  }, [payrollData]);
 
-  const filteredEmployeeAttendance = employeeAttendance.filter(employee =>
-    employee.name.toLowerCase().includes(employeeSearch.toLowerCase()) &&
-    (siteFilter === 'all' || employee.site === siteFilter) &&
-    (departmentFilter === 'all' || employee.department === departmentFilter) &&
-    (statusFilter === 'all' || employee.status === statusFilter)
-  );
+  // Filter payroll data based on search
+  const filteredPayrollData = useMemo(() => {
+    return payrollData.filter(item =>
+      item.siteName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [payrollData, searchTerm]);
 
-  // Filter functions for Machinery
-  const filteredMachinery = machineryReports.filter(machine =>
-    machine.name.toLowerCase().includes(machinerySearch.toLowerCase()) &&
-    (machineryStatusFilter === 'all' || machine.status === machineryStatusFilter) &&
-    (machinerySiteFilter === 'all' || machine.site === machinerySiteFilter) &&
-    (machineryTypeFilter === 'all' || machine.type === machineryTypeFilter)
-  );
+  // Paginate payroll data
+  const paginatedPayrollData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPayrollData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredPayrollData, currentPage, itemsPerPage]);
 
-  // Filter functions for Debtors
-  const filteredDebtors = debtorReports.filter(debtor =>
-    debtor.partyName.toLowerCase().includes(debtorSearch.toLowerCase()) &&
-    (debtorStatusFilter === 'all' || debtor.status === debtorStatusFilter)
-  );
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredPayrollData.length / itemsPerPage);
 
-  // Pagination calculations
-  const attendanceTotalPages = Math.ceil(filteredAttendance.length / itemsPerPage);
-  const employeeTotalPages = Math.ceil(filteredEmployeeAttendance.length / itemsPerPage);
-  const machineryTotalPages = Math.ceil(filteredMachinery.length / itemsPerPage);
-  const debtorTotalPages = Math.ceil(filteredDebtors.length / itemsPerPage);
+  // Get selected site data for pie chart
+  const selectedSiteData = payrollData.find(item => item.siteName === selectedSite);
 
-  const paginatedAttendance = filteredAttendance.slice(
-    (attendancePage - 1) * itemsPerPage,
-    attendancePage * itemsPerPage
-  );
+  // Prepare pie chart data for selected site
+  const sitePieChartData = selectedSiteData ? [
+    { name: 'Total Paid', value: selectedSiteData.totalPaid, color: CHART_COLORS.payroll[1] },
+    { name: 'Hold Salary', value: selectedSiteData.holdSalary, color: CHART_COLORS.payroll[5] }
+  ] : [];
 
-  const paginatedEmployeeAttendance = filteredEmployeeAttendance.slice(
-    (employeePage - 1) * itemsPerPage,
-    employeePage * itemsPerPage
-  );
+  // Navigation handlers for main pie chart (Today's chart)
+  const handlePreviousDay = () => {
+    setCurrentDayIndex(prev => (prev > 0 ? prev - 1 : attendanceData.length - 1));
+  };
 
-  const paginatedMachinery = filteredMachinery.slice(
-    (machineryPage - 1) * itemsPerPage,
-    machineryPage * itemsPerPage
-  );
+  const handleNextDay = () => {
+    setCurrentDayIndex(prev => (prev < attendanceData.length - 1 ? prev + 1 : 0));
+  };
 
-  const paginatedDebtors = filteredDebtors.slice(
-    (debtorPage - 1) * itemsPerPage,
-    debtorPage * itemsPerPage
-  );
+  // Navigation handlers for 6 days pie charts
+  const handleSixDaysPrevious = () => {
+    setSixDaysStartIndex(prev => {
+      const newIndex = prev + 6;
+      // Don't go beyond the available data (stop at the last 6 days before today)
+      const maxIndex = attendanceData.length - 6;
+      return newIndex <= maxIndex ? newIndex : prev;
+    });
+  };
+
+  const handleSixDaysNext = () => {
+    setSixDaysStartIndex(prev => {
+      const newIndex = prev - 6;
+      // Don't go below 1 (yesterday)
+      return newIndex >= 1 ? newIndex : prev;
+    });
+  };
+
+  // Check if navigation buttons should be enabled
+  const canGoSixDaysPrevious = sixDaysStartIndex < attendanceData.length - 6;
+  const canGoSixDaysNext = sixDaysStartIndex > 1;
+
+  // Calculate date range for the current 6-day block
+  const getDateRangeText = () => {
+    if (sixDaysData.length === 0) return '';
+    
+    const firstDate = new Date(sixDaysData[0].date);
+    const lastDate = new Date(sixDaysData[sixDaysData.length - 1].date);
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    };
+    
+    return `${formatDate(firstDate)} - ${formatDate(lastDate)}`;
+  };
+
+  // Handle payroll filter change
+  const handlePayrollFilterChange = () => {
+    // In a real application, this would fetch data from API based on year and month
+    // For now, we'll just regenerate the data to simulate the filter
+    setPayrollData(generatePayrollData());
+    setCurrentPage(1); // Reset to first page
+    toast.success(`Payroll data updated for ${months.find(m => m.value === selectedMonth)?.label} ${selectedYear}`);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle export to Excel
+  const handleExportToExcel = () => {
+    const monthName = months.find(m => m.value === selectedMonth)?.label;
+    const filename = `Payroll_Data_${monthName}_${selectedYear}.csv`;
+    
+    // Export all filtered data, not just the current page
+    exportToExcel(filteredPayrollData, filename);
+    toast.success(`Payroll data exported to ${filename}`);
+  };
+
+  // Handle pie chart click to redirect to site-wise attendance with selected date
+  const handlePieChartClick = (date?: string) => {
+    const selectedDate = date || currentDayData.date;
+    navigate(`/admin/attendance?view=site&date=${selectedDate}`);
+  };
+
+  // Handle small pie chart click with specific date
+  const handleSmallPieChartClick = (dayData: any) => {
+    navigate(`/admin/attendance?view=site&date=${dayData.date}`);
+  };
+
+  // Handle department card click to redirect to department wise attendance
+  const handleDepartmentCardClick = (department: string) => {
+    navigate(`/admin/attendance?view=department&department=${department}&date=Today`);
+  };
+
+  // Custom tooltip for pie chart
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-white p-3 border rounded-lg shadow-lg">
+          <p className="font-semibold text-sm">{data.name}</p>
+          <p className="text-sm" style={{ color: data.payload.fill }}>
+            {data.value} employees ({((data.value / currentDayData.total) * 100).toFixed(1)}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom tooltip for payroll pie chart
+  const CustomPayrollTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-white p-3 border rounded-lg shadow-lg">
+          <p className="font-semibold text-sm">{data.name}</p>
+          <p className="text-sm" style={{ color: data.payload.fill }}>
+            {formatCurrency(data.value)} ({((data.value / (selectedSiteData?.billingAmount || 1)) * 100).toFixed(1)}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  // Calculate difference for a payroll item
+  const calculateDifference = (item: any) => {
+    return item.billingAmount - item.totalPaid + item.holdSalary;
+  };
 
   // Quick action handlers
   const handleDownloadReport = () => {
@@ -747,57 +645,6 @@ const AdminDashboard = () => {
     toast.success('Payroll generation started');
   };
 
-  // Export handlers
-  const handleExportAttendance = (type: string) => {
-    toast.success(`${type} attendance report exported successfully`);
-  };
-
-  const handleExportMachinery = () => {
-    toast.success('Machinery report exported successfully');
-  };
-
-  const handleExportDebtors = () => {
-    toast.success('Debtors report exported successfully');
-  };
-
-  // Get unique values for filters
-  const uniqueSites = [...new Set(employeeAttendance.map(emp => emp.site))];
-  const uniqueDepartments = [...new Set(employeeAttendance.map(emp => emp.department))];
-  const uniqueMachinerySites = [...new Set(machineryReports.map(machine => machine.site))];
-  const uniqueTypes = [...new Set(machineryReports.map(machine => machine.type))];
-
-  // Calculate totals
-  const totalOutstanding = debtorReports.reduce((sum, debtor) => sum + debtor.pendingAmount, 0);
-  const activeMachineryCount = machineryReports.filter(m => m.status === 'active').length;
-  const maintenanceMachineryCount = machineryReports.filter(m => m.status === 'maintenance').length;
-  const idleMachineryCount = machineryReports.filter(m => m.status === 'idle').length;
-
-  // Department icons mapping
-  const departmentIcons = {
-    'Housekeeping': Home,
-    'Security': Shield,
-    'Parking': Car,
-    'Waste Management': Trash2,
-    'STP Tank Cleaning': Droplets,
-    'Consumables': ShoppingCart
-  };
-
-  // Activity icons mapping
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'attendance':
-        return <UserCheck className="h-4 w-4 text-blue-500" />;
-      case 'system':
-        return <BarChart3 className="h-4 w-4 text-green-500" />;
-      case 'user':
-        return <Users className="h-4 w-4 text-purple-500" />;
-      case 'approval':
-        return <CheckCircle2 className="h-4 w-4 text-orange-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
@@ -806,7 +653,7 @@ const AdminDashboard = () => {
         onMenuClick={onMenuClick}
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Quick Actions Bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -829,7 +676,7 @@ const AdminDashboard = () => {
               className="flex items-center gap-2"
               variant="outline"
             >
-              <RefreshCw className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4" />
               Sync Data
             </Button>
             
@@ -838,7 +685,7 @@ const AdminDashboard = () => {
               className="flex items-center gap-2"
               variant="outline"
             >
-              <Send className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" />
               Send Reminders
             </Button>
             
@@ -865,62 +712,260 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title="Total Managers"
-            value={stats.totalManagers}
+            value={adminStats.totalManagers}
             icon={Briefcase}
             trend={{ value: 12, isPositive: true }}
             delay={0}
           />
           <StatCard
             title="Total Supervisors"
-            value={stats.totalSupervisors}
+            value={adminStats.totalSupervisors}
             icon={Shield}
             trend={{ value: 8, isPositive: true }}
             delay={0.1}
           />
           <StatCard
             title="Total Employees"
-            value={stats.totalEmployees}
+            value={adminStats.totalEmployees}
             icon={Users}
             trend={{ value: 15, isPositive: true }}
             delay={0.2}
           />
           <StatCard
             title="Total Sites"
-            value={stats.totalSites}
+            value={adminStats.totalSites}
             icon={Building2}
             trend={{ value: 5, isPositive: true }}
             delay={0.3}
           />
         </div>
 
-        {/* Department Overview */}
+        {/* 7 Days Attendance Rate Pie Charts */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <PieChartIcon className="h-5 w-5" />
+                7 Days Attendance Rate
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Present vs Absent ratio for the last 7 days. Click on charts to view site-wise attendance details for that specific day.
+              </p>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6">
+              {/* 6 Days Small Pie Charts with Navigation */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">Previous Days Overview</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {getDateRangeText()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSixDaysPrevious}
+                      disabled={!canGoSixDaysPrevious}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSixDaysNext}
+                      disabled={!canGoSixDaysNext}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {sixDaysData.map((dayData, index) => {
+                    const pieData = [
+                      { name: 'Present', value: dayData.present, color: CHART_COLORS.present },
+                      { name: 'Absent', value: dayData.absent, color: CHART_COLORS.absent }
+                    ];
+
+                    return (
+                      <Card 
+                        key={`${dayData.date}-${index}`}
+                        className="cursor-pointer transform transition-all duration-200 hover:scale-105"
+                        onClick={() => handleSmallPieChartClick(dayData)}
+                      >
+                        <CardContent className="p-3">
+                          <div className="text-center mb-2">
+                            <p className="text-xs font-medium text-gray-700">{dayData.day}</p>
+                            <p className="text-xs text-muted-foreground">{dayData.date}</p>
+                            <Badge variant={
+                              parseFloat(dayData.rate) > 90 ? 'default' :
+                              parseFloat(dayData.rate) > 80 ? 'secondary' : 'destructive'
+                            } className="mt-1 text-xs">
+                              {dayData.rate}
+                            </Badge>
+                          </div>
+                          <div className="h-32">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <RechartsPieChart>
+                                <Pie
+                                  data={pieData}
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={40}
+                                  fill="#8884d8"
+                                  dataKey="value"
+                                  labelLine={false}
+                                >
+                                  {pieData.map((entry, cellIndex) => (
+                                    <Cell key={`cell-${cellIndex}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                              </RechartsPieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="text-center mt-2">
+                            <div className="flex justify-center space-x-4 text-xs">
+                              <div className="flex items-center">
+                                <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                                <span>{dayData.present}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <div className="w-2 h-2 bg-red-500 rounded-full mr-1"></div>
+                                <span>{dayData.absent}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+                
+                {/* Navigation Info */}
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {sixDaysData.length} days of historical data
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Page {Math.floor((sixDaysStartIndex - 1) / 6) + 1}</span>
+                    <span>•</span>
+                    <span>Use arrows to navigate</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Today's Pie Chart with Navigation */}
+              <div className="border-t pt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      {currentDayData.day} - {currentDayData.date}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Total Employees: {currentDayData.total} | Attendance Rate: {currentDayData.rate}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePreviousDay}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground mx-2">
+                      {currentDayIndex + 1} of {attendanceData.length}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleNextDay}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div 
+                  className="cursor-pointer transform transition-all duration-200 hover:scale-105"
+                  onClick={() => handlePieChartClick(currentDayData.date)}
+                >
+                  <div className="w-full h-80 sm:h-96 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-4 border-2 border-blue-100 hover:border-blue-300 transition-colors">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={currentDayPieData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={120}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {currentDayPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomPieTooltip />} />
+                        <Legend />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="text-center mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Click on the chart to view site-wise attendance details for {currentDayData.date}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Department View */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
           <Card>
-            <CardHeader>
-              <CardTitle>Department Overview</CardTitle>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg">Department View</CardTitle>
               <p className="text-sm text-muted-foreground">
-                All facility management departments with current workforce distribution
+                Click on each department card to view department-wise attendance across all sites
               </p>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {dailySummary.departmentWiseSummary.map((dept) => {
-                  const IconComponent = departmentIcons[dept.department as keyof typeof departmentIcons] || Users;
+            <CardContent className="px-4 sm:px-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                {departmentViewData.map((dept) => {
+                  const IconComponent = dept.icon;
                   return (
-                    <Card key={dept.department} className="text-center">
-                      <CardContent className="p-4">
-                        <IconComponent className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                        <p className="text-sm font-medium">{dept.department}</p>
-                        <p className="text-2xl font-bold">{dept.present}</p>
+                    <Card 
+                      key={dept.department} 
+                      className="text-center cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-lg border-2 hover:border-blue-300"
+                      onClick={() => handleDepartmentCardClick(dept.department)}
+                    >
+                      <CardContent className="p-3 sm:p-4">
+                        <IconComponent className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-blue-600" />
+                        <p className="text-xs sm:text-sm font-medium">{dept.department}</p>
+                        <p className="text-xl sm:text-2xl font-bold">{dept.present}</p>
                         <p className="text-xs text-muted-foreground">/{dept.total}</p>
                         <Badge variant={
                           parseFloat(dept.rate) > 90 ? 'default' :
                           parseFloat(dept.rate) > 80 ? 'secondary' : 'destructive'
-                        } className="mt-1">
+                        } className="mt-1 text-xs">
                           {dept.rate}
                         </Badge>
                       </CardContent>
@@ -932,566 +977,168 @@ const AdminDashboard = () => {
           </Card>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Activity Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="lg:col-span-1"
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="flex-shrink-0 mt-1">
-                        {getActivityIcon(activity.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{activity.action}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-muted-foreground">
-                            {activity.user}
-                          </span>
-                          <span className="text-xs text-muted-foreground">•</span>
-                          <span className="text-xs text-muted-foreground">
-                            {activity.timestamp}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Activity Summary */}
-                <div className="mt-6 p-4 bg-muted rounded-lg">
-                  <h4 className="font-medium mb-2">Today's Summary</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Present: </span>
-                      <span className="font-medium">{dailySummary.present}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Absent: </span>
-                      <span className="font-medium">{dailySummary.absent}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Late: </span>
-                      <span className="font-medium">{dailySummary.lateArrivals}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Half Days: </span>
-                      <span className="font-medium">{dailySummary.halfDays}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Attendance Overview Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="lg:col-span-2"
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  Today's Attendance Overview
-                </CardTitle>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                    className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <Button variant="outline" size="icon">
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-green-600">{dailySummary.present}</div>
-                      <div className="text-sm text-muted-foreground">Present</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-red-600">{dailySummary.absent}</div>
-                      <div className="text-sm text-muted-foreground">Absent</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">{dailySummary.lateArrivals}</div>
-                      <div className="text-sm text-muted-foreground">Late Arrivals</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-600">{dailySummary.overallAttendance}</div>
-                      <div className="text-sm text-muted-foreground">Overall Rate</div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Site-wise Progress */}
-                <div className="space-y-4">
-                  <h4 className="font-medium">Site-wise Attendance</h4>
-                  {dailySummary.siteWiseSummary.map((site, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{site.site}</span>
-                        <span className={parseFloat(site.rate) > 85 ? "text-green-600" : "text-orange-600"}>
-                          {site.present}/{site.total} ({site.rate})
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${
-                            parseFloat(site.rate) > 90 ? "bg-green-600" :
-                            parseFloat(site.rate) > 85 ? "bg-blue-600" :
-                            parseFloat(site.rate) > 80 ? "bg-orange-500" : "bg-red-600"
-                          }`}
-                          style={{ width: site.rate }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Attendance Reports Section */}
+        {/* Outstanding Amount Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
+          transition={{ delay: 0.6 }}
         >
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Attendance Management System</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Comprehensive attendance tracking and reporting across all facility management departments
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                    className="w-32"
-                  />
-                  <span>to</span>
-                  <Input
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                    className="w-32"
-                  />
+          <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg flex items-center gap-2 text-red-700">
+                <PieChartIcon className="h-5 w-5" />
+                Outstanding Amount
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Total outstanding amount from all debtors and parties
+              </p>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6">
+              <div className="text-center py-6">
+                <div className="text-4xl sm:text-5xl font-bold text-red-600 mb-4">
+                  ₹{(outstandingData.totalOutstandingDue / 100000).toFixed(1)} Lakhs
+                </div>
+                <div className="text-lg text-muted-foreground">
+                  Total Outstanding Due
+                </div>
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Total Invoices Card */}
+                  <Card className="bg-white border-blue-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-800">Total Invoices</p>
+                          <p className="text-2xl font-bold text-blue-600">{outstandingData.totalInvoices}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Total invoices generated</p>
+                        </div>
+                        <div className="p-3 bg-blue-100 rounded-full">
+                          <FileText className="h-6 w-6 text-blue-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Received Total Amount Card */}
+                  <Card className="bg-white border-green-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Received Total Amount</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {formatCurrency(outstandingData.receivedTotalAmount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">Amount received so far</p>
+                        </div>
+                        <div className="p-3 bg-green-100 rounded-full">
+                          <Receipt className="h-6 w-6 text-green-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total Outstanding Due Card */}
+                  <Card className="bg-white border-red-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-800">Total Outstanding Due</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {formatCurrency(outstandingData.totalOutstandingDue)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">Pending amount to be received</p>
+                        </div>
+                        <div className="p-3 bg-red-100 rounded-full">
+                          <AlertTriangle className="h-6 w-6 text-red-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="site-wise" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="site-wise" className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Site-wise
-                  </TabsTrigger>
-                  <TabsTrigger value="employee-wise" className="flex items-center gap-2">
-                    <UsersIcon className="h-4 w-4" />
-                    Employee-wise
-                  </TabsTrigger>
-                  <TabsTrigger value="daily-summary" className="flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" />
-                    Daily Summary
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Site-wise Attendance Tab */}
-                <TabsContent value="site-wise" className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by site name..."
-                          value={attendanceSearch}
-                          onChange={(e) => setAttendanceSearch(e.target.value)}
-                          className="w-64"
-                        />
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleExportAttendance('Site-wise')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </div>
-
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Site Name</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Total Employees</TableHead>
-                          <TableHead>Present</TableHead>
-                          <TableHead>Absent</TableHead>
-                          <TableHead>Late Arrivals</TableHead>
-                          <TableHead>Early Departures</TableHead>
-                          <TableHead>Attendance Rate</TableHead>
-                          <TableHead>Shortage</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedAttendance.map((site) => (
-                          <TableRow key={site.id}>
-                            <TableCell className="font-medium">{site.site}</TableCell>
-                            <TableCell>{site.date}</TableCell>
-                            <TableCell>{site.totalEmployees}</TableCell>
-                            <TableCell className="text-green-600">{site.present}</TableCell>
-                            <TableCell className="text-red-600">{site.absent}</TableCell>
-                            <TableCell className="text-orange-600">{site.lateArrivals}</TableCell>
-                            <TableCell className="text-orange-600">{site.earlyDepartures}</TableCell>
-                            <TableCell>
-                              <Badge variant={
-                                parseFloat(site.attendanceRate) > 90 ? 'default' :
-                                parseFloat(site.attendanceRate) > 80 ? 'secondary' : 'destructive'
-                              }>
-                                {site.attendanceRate}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-red-600 font-medium">{site.shortage}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <Pagination
-                    currentPage={attendancePage}
-                    totalPages={attendanceTotalPages}
-                    onPageChange={setAttendancePage}
-                    totalItems={filteredAttendance.length}
-                    itemsPerPage={itemsPerPage}
-                  />
-                </TabsContent>
-
-                {/* Employee-wise Attendance Tab */}
-                <TabsContent value="employee-wise" className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by employee name..."
-                          value={employeeSearch}
-                          onChange={(e) => setEmployeeSearch(e.target.value)}
-                          className="w-64"
-                        />
-                      </div>
-                      <Select value={siteFilter} onValueChange={setSiteFilter}>
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="All Sites" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Sites</SelectItem>
-                          {uniqueSites.map(site => (
-                            <SelectItem key={site} value={site}>{site}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="All Departments" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Departments</SelectItem>
-                          {uniqueDepartments.map(dept => (
-                            <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="All Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="present">Present</SelectItem>
-                          <SelectItem value="absent">Absent</SelectItem>
-                          <SelectItem value="half-day">Half Day</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleExportAttendance('Employee-wise')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </div>
-
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Employee ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Department</TableHead>
-                          <TableHead>Site</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Check In</TableHead>
-                          <TableHead>Check Out</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Late By</TableHead>
-                          <TableHead>Early Departure</TableHead>
-                          <TableHead>Total Hours</TableHead>
-                          <TableHead>Overtime</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedEmployeeAttendance.map((employee) => {
-                          const IconComponent = departmentIcons[employee.department as keyof typeof departmentIcons] || Users;
-                          return (
-                            <TableRow key={employee.id}>
-                              <TableCell className="font-medium">{employee.employeeId}</TableCell>
-                              <TableCell className="font-medium">{employee.name}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <IconComponent className="h-4 w-4 text-muted-foreground" />
-                                  {employee.department}
-                                </div>
-                              </TableCell>
-                              <TableCell>{employee.site}</TableCell>
-                              <TableCell>{employee.date}</TableCell>
-                              <TableCell>
-                                <div className={`flex items-center gap-1 ${
-                                  employee.checkIn !== '-' && employee.checkIn > '09:00 AM' ? 'text-orange-600' : 'text-green-600'
-                                }`}>
-                                  <Clock className="h-3 w-3" />
-                                  {employee.checkIn}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className={`flex items-center gap-1 ${
-                                  employee.checkOut !== '-' && employee.checkOut < '06:00 PM' ? 'text-orange-600' : 'text-green-600'
-                                }`}>
-                                  <Clock className="h-3 w-3" />
-                                  {employee.checkOut}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={
-                                  employee.status === 'present' ? 'default' :
-                                  employee.status === 'absent' ? 'destructive' : 'secondary'
-                                }>
-                                  {employee.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <span className={employee.lateBy !== '-' && employee.lateBy !== '0 mins' ? 'text-orange-600' : 'text-green-600'}>
-                                  {employee.lateBy}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <span className={employee.earlyDeparture !== '-' && employee.earlyDeparture !== '0 mins' ? 'text-orange-600' : 'text-green-600'}>
-                                  {employee.earlyDeparture}
-                                </span>
-                              </TableCell>
-                              <TableCell>{employee.totalHours}</TableCell>
-                              <TableCell>
-                                <span className={employee.overtime !== '0 mins' ? 'text-blue-600' : 'text-gray-600'}>
-                                  {employee.overtime}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <Pagination
-                    currentPage={employeePage}
-                    totalPages={employeeTotalPages}
-                    onPageChange={setEmployeePage}
-                    totalItems={filteredEmployeeAttendance.length}
-                    itemsPerPage={itemsPerPage}
-                  />
-                </TabsContent>
-
-                {/* Daily Summary Tab */}
-                <TabsContent value="daily-summary" className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Daily Attendance Summary - {dailySummary.date}</h3>
-                      <p className="text-sm text-muted-foreground">Overall organization attendance overview</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleExportAttendance('Daily Summary')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Site-wise Summary */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-sm">Site-wise Attendance</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {dailySummary.siteWiseSummary.map((site, index) => (
-                            <div key={index} className="space-y-2">
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="font-medium">{site.site}</span>
-                                <span className={parseFloat(site.rate) > 85 ? "text-green-600" : "text-orange-600"}>
-                                  {site.present}/{site.total} ({site.rate})
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div 
-                                  className={`h-2 rounded-full ${
-                                    parseFloat(site.rate) > 90 ? "bg-green-600" :
-                                    parseFloat(site.rate) > 85 ? "bg-blue-600" :
-                                    parseFloat(site.rate) > 80 ? "bg-orange-500" : "bg-red-600"
-                                  }`}
-                                  style={{ width: site.rate }}
-                                ></div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Department-wise Summary */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-sm">Department-wise Attendance</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {dailySummary.departmentWiseSummary.map((dept, index) => {
-                            const IconComponent = departmentIcons[dept.department as keyof typeof departmentIcons] || Users;
-                            return (
-                              <div key={index} className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <IconComponent className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium">{dept.department}</span>
-                                  </div>
-                                  <span className={parseFloat(dept.rate) > 85 ? "text-green-600" : "text-orange-600"}>
-                                    {dept.present}/{dept.total} ({dept.rate})
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className={`h-2 rounded-full ${
-                                      parseFloat(dept.rate) > 90 ? "bg-green-600" :
-                                      parseFloat(dept.rate) > 85 ? "bg-blue-600" :
-                                      parseFloat(dept.rate) > 80 ? "bg-orange-500" : "bg-red-600"
-                                    }`}
-                                    style={{ width: dept.rate }}
-                                  ></div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-              </Tabs>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Site Machinery Reports */}
+        {/* Payroll Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
         >
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Site Machinery Reports</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  All facility management machinery with current status and maintenance details
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleExportMachinery}>
-                <Download className="h-4 w-4 mr-2" />
-                Export Report
-              </Button>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg">Payroll Management</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Site-wise payroll details with year and month filters
+              </p>
             </CardHeader>
-            <CardContent>
-              {/* Filters */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex items-center gap-2 flex-1">
-                  <Search className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search machinery by name..."
-                    value={machinerySearch}
-                    onChange={(e) => setMachinerySearch(e.target.value)}
-                    className="w-64"
-                  />
+            <CardContent className="px-4 sm:px-6">
+              {/* Payroll Filters */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Year</label>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {years.map(year => (
+                          <SelectItem key={year} value={year}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Month</label>
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {months.map(month => (
+                          <SelectItem key={month.value} value={month.value}>
+                            {month.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium invisible">Apply</label>
+                    <Button 
+                      onClick={handlePayrollFilterChange}
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                    >
+                      Apply Filters
+                    </Button>
+                  </div>
                 </div>
-                <Select value={machineryStatusFilter} onValueChange={setMachineryStatusFilter}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="maintenance">Under Maintenance</SelectItem>
-                    <SelectItem value="idle">Idle</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={machinerySiteFilter} onValueChange={setMachinerySiteFilter}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="All Sites" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sites</SelectItem>
-                    {uniqueMachinerySites.map(site => (
-                      <SelectItem key={site} value={site}>{site}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
-              {/* Machinery Status Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {/* Payroll Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Total Billing</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                          {formatCurrency(payrollSummary.totalBilling)}
+                        </p>
+                      </div>
+                      <DollarSign className="h-8 w-8 text-blue-600" />
+                    </div>
+                  </CardContent>
+                </Card>
                 <Card className="bg-green-50 border-green-200">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-green-800">Active Machinery</p>
-                        <p className="text-2xl font-bold text-green-600">{activeMachineryCount}</p>
-                        <p className="text-xs text-green-600">Ready for operation</p>
+                        <p className="text-sm font-medium text-green-800">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          {formatCurrency(payrollSummary.totalPaid)}
+                        </p>
                       </div>
                       <CheckCircle2 className="h-8 w-8 text-green-600" />
                     </div>
@@ -1501,257 +1148,269 @@ const AdminDashboard = () => {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-orange-800">Under Maintenance</p>
-                        <p className="text-2xl font-bold text-orange-600">{maintenanceMachineryCount}</p>
-                        <p className="text-xs text-orange-600">Being serviced</p>
-                      </div>
-                      <Settings className="h-8 w-8 text-orange-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-blue-800">Idle Machinery</p>
-                        <p className="text-2xl font-bold text-blue-600">{idleMachineryCount}</p>
-                        <p className="text-xs text-blue-600">Awaiting assignment</p>
-                      </div>
-                      <Package className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Machinery Table */}
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Machinery ID</TableHead>
-                      <TableHead>Name & Model</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Site</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Operator</TableHead>
-                      <TableHead>Last Maintenance</TableHead>
-                      <TableHead>Next Maintenance</TableHead>
-                      <TableHead>Hours Operated</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedMachinery.map((machine) => (
-                      <TableRow key={machine.id}>
-                        <TableCell className="font-medium">{machine.machineryId}</TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{machine.name}</div>
-                            <div className="text-sm text-muted-foreground">{machine.model}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{machine.type}</TableCell>
-                        <TableCell>{machine.site}</TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            machine.status === 'active' ? 'default' :
-                            machine.status === 'maintenance' ? 'secondary' : 'outline'
-                          }>
-                            {machine.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{machine.operator}</div>
-                            <div className="text-sm text-muted-foreground">{machine.operatorPhone}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{machine.lastMaintenance}</TableCell>
-                        <TableCell>
-                          <div className={`font-medium ${
-                            new Date(machine.nextMaintenance) < new Date() ? 'text-red-600' :
-                            'text-green-600'
-                          }`}>
-                            {machine.nextMaintenance}
-                          </div>
-                        </TableCell>
-                        <TableCell>{machine.hoursOperated.toLocaleString()} hrs</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <Pagination
-                currentPage={machineryPage}
-                totalPages={machineryTotalPages}
-                onPageChange={setMachineryPage}
-                totalItems={filteredMachinery.length}
-                itemsPerPage={itemsPerPage}
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Outstanding Debtors Reports */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9 }}
-        >
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Outstanding Debtors Reports</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Parties/customers with outstanding balances and payment details
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleExportDebtors}>
-                <Download className="h-4 w-4 mr-2" />
-                Export Report
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {/* Filters */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex items-center gap-2 flex-1">
-                  <Search className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by party name..."
-                    value={debtorSearch}
-                    onChange={(e) => setDebtorSearch(e.target.value)}
-                    className="w-64"
-                  />
-                </div>
-                <Select value={debtorStatusFilter} onValueChange={setDebtorStatusFilter}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Total Outstanding</p>
-                        <p className="text-2xl font-bold text-red-600">
-                          ₹{totalOutstanding.toLocaleString()}
-                        </p>
-                      </div>
-                      <DollarSign className="h-8 w-8 text-red-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Total Parties</p>
-                        <p className="text-2xl font-bold">{debtorReports.length}</p>
-                      </div>
-                      <Users className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Pending</p>
+                        <p className="text-sm font-medium text-orange-800">Hold Salary</p>
                         <p className="text-2xl font-bold text-orange-600">
-                          {debtorReports.filter(d => d.status === 'pending').length}
+                          {formatCurrency(payrollSummary.totalHold)}
                         </p>
                       </div>
                       <Clock className="h-8 w-8 text-orange-600" />
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="bg-purple-50 border-purple-200">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium">Overdue</p>
-                        <p className="text-2xl font-bold text-red-600">
-                          {debtorReports.filter(d => d.status === 'overdue').length}
+                        <p className="text-sm font-medium text-purple-800">Total Difference</p>
+                        <p className="text-2xl font-bold text-purple-600">
+                          {formatCurrency(payrollSummary.totalDifference)}
                         </p>
                       </div>
-                      <AlertCircle className="h-8 w-8 text-red-600" />
+                      <AlertCircle className="h-8 w-8 text-purple-600" />
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Debtors Table */}
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Party ID</TableHead>
-                      <TableHead>Party Name</TableHead>
-                      <TableHead>Contact Person</TableHead>
-                      <TableHead>Contact Info</TableHead>
-                      <TableHead>Total Amount</TableHead>
-                      <TableHead>Pending Amount</TableHead>
-                      <TableHead>Last Payment</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedDebtors.map((debtor) => (
-                      <TableRow key={debtor.id}>
-                        <TableCell className="font-medium">{debtor.partyId}</TableCell>
-                        <TableCell className="font-medium">{debtor.partyName}</TableCell>
-                        <TableCell>{debtor.contactPerson}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{debtor.phone}</div>
-                            <div className="text-muted-foreground">{debtor.email}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>₹{debtor.totalAmount.toLocaleString()}</TableCell>
-                        <TableCell className="font-medium text-red-600">
-                          ₹{debtor.pendingAmount.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{debtor.lastPaymentDate}</div>
-                            <div className="text-muted-foreground">₹{debtor.lastPaymentAmount.toLocaleString()}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className={`font-medium ${
-                            debtor.status === 'overdue' ? 'text-red-600' : 'text-green-600'
-                          }`}>
-                            {debtor.dueDate}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={debtor.status === 'overdue' ? 'destructive' : 'secondary'}>
-                            {debtor.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              {/* Payroll Tabs */}
+              <div className="mb-6">
+                <div className="border-b">
+                  <div className="flex space-x-8">
+                    <button
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                        payrollTab === 'list-view'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                      onClick={() => setPayrollTab('list-view')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <List className="h-4 w-4" />
+                        List View
+                      </div>
+                    </button>
+                    <button
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                        payrollTab === 'pie-chart'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                      onClick={() => setPayrollTab('pie-chart')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <PieChart className="h-4 w-4" />
+                        Pie Chart View
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <Pagination
-                currentPage={debtorPage}
-                totalPages={debtorTotalPages}
-                onPageChange={setDebtorPage}
-                totalItems={filteredDebtors.length}
-                itemsPerPage={itemsPerPage}
-              />
+              {/* List View */}
+              {payrollTab === 'list-view' && (
+                <div className="space-y-4">
+                  {/* Search */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Search className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by site name..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full sm:w-64"
+                      />
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleExportToExcel}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export Excel
+                    </Button>
+                  </div>
+
+                  {/* Payroll Table */}
+                  <div className="rounded-md border">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Site Name</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Billing Amount</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Total Paid</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Hold Salary</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Difference</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Remark</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedPayrollData.map((item) => {
+                            const difference = calculateDifference(item);
+                            return (
+                              <tr key={item.id} className="border-b hover:bg-muted/50">
+                                <td className="p-4 align-middle font-medium">
+                                  <div>
+                                    <div className="font-medium text-sm">{item.siteName.split(',')[0]}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {item.siteName.split(',').slice(1).join(',')}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-4 align-middle font-bold">
+                                  {formatCurrency(item.billingAmount)}
+                                </td>
+                                <td className="p-4 align-middle text-green-600 font-semibold">
+                                  {formatCurrency(item.totalPaid)}
+                                </td>
+                                <td className="p-4 align-middle text-orange-600 font-semibold">
+                                  {formatCurrency(item.holdSalary)}
+                                </td>
+                                <td className="p-4 align-middle font-bold" style={{ 
+                                  color: difference > 0 ? '#ef4444' : difference < 0 ? '#10b981' : '#6b7280'
+                                }}>
+                                  {formatCurrency(difference)}
+                                </td>
+                                <td className="p-4 align-middle">
+                                  <Badge variant={item.status === 'Paid' ? 'default' : 'secondary'} className="text-xs">
+                                    {item.status}
+                                  </Badge>
+                                </td>
+                                <td className="p-4 align-middle">
+                                  <span className="text-xs text-muted-foreground">{item.remark}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={handlePageChange}
+                      totalItems={filteredPayrollData.length}
+                      itemsPerPage={itemsPerPage}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Pie Chart View */}
+              {payrollTab === 'pie-chart' && (
+                <div className="space-y-6">
+                  {/* Site Selection */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Select Site</label>
+                      <Select value={selectedSite} onValueChange={setSelectedSite}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Site" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {siteNames.map(site => (
+                            <SelectItem key={site} value={site}>
+                              {site.split(',')[0]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium invisible">Info</label>
+                      <div className="text-sm text-muted-foreground">
+                        Showing payroll distribution for selected site
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pie Chart */}
+                  {selectedSiteData && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Payroll Distribution - {selectedSite.split(',')[0]}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-80">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <RechartsPieChart>
+                                <Pie
+                                  data={sitePieChartData}
+                                  cx="50%"
+                                  cy="50%"
+                                  labelLine={false}
+                                  outerRadius={100}
+                                  fill="#8884d8"
+                                  dataKey="value"
+                                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                >
+                                  {sitePieChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip content={<CustomPayrollTooltip />} />
+                                <Legend />
+                              </RechartsPieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Site Details */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Site Details</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                              <span className="font-medium">Billing Amount:</span>
+                              <span className="font-bold text-blue-600">
+                                {formatCurrency(selectedSiteData.billingAmount)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                              <span className="font-medium">Total Paid:</span>
+                              <span className="font-bold text-green-600">
+                                {formatCurrency(selectedSiteData.totalPaid)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                              <span className="font-medium">Hold Salary:</span>
+                              <span className="font-bold text-orange-600">
+                                {formatCurrency(selectedSiteData.holdSalary)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                              <span className="font-medium">Difference:</span>
+                              <span className="font-bold text-purple-600">
+                                {formatCurrency(calculateDifference(selectedSiteData))}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                              <span className="font-medium">Status:</span>
+                              <Badge variant={selectedSiteData.status === 'Paid' ? 'default' : 'secondary'}>
+                                {selectedSiteData.status}
+                              </Badge>
+                            </div>
+                            <div className="p-3 bg-gray-50 rounded-lg">
+                              <span className="font-medium">Remark: </span>
+                              <span className="text-muted-foreground">{selectedSiteData.remark}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>

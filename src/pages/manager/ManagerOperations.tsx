@@ -13,7 +13,7 @@ import AlertsSection from "./components/AlertsSection";
 import PriceCalculator from "./components/PriceCalculator";
 import { initialTasks, initialSites, initialRoster, serviceTypes, initialAlerts } from "./data";
 
-const Operations = () => {
+const ManagerOperations = () => {
   const [activeTab, setActiveTab] = useState("tasks");
   const [tasks] = useState(initialTasks);
 
@@ -35,9 +35,9 @@ const Operations = () => {
             <TabsTrigger value="roster">Roster</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="alerts">Alerts & Issues</TabsTrigger>
-            <TabsTrigger value="calculator">
+            <TabsTrigger value="Training">
               <Calculator className="h-4 w-4 mr-2" />
-              Calculator
+              Training
             </TabsTrigger>
           </TabsList>
 
@@ -70,4 +70,4 @@ const Operations = () => {
   );
 };
 
-export default Operations;
+export default ManagerOperations;

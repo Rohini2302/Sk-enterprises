@@ -16,6 +16,7 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole>("superadmin");
+  const [loading, setLoading] = useState(false);
   const { signup } = useRole();
   const navigate = useNavigate();
 
@@ -32,20 +33,30 @@ const Signup = () => {
       return;
     }
 
+    if (password.length < 6) {
+      toast.error("Password should be at least 6 characters");
+      return;
+    }
+
     if (selectedRole !== "superadmin") {
       toast.error("Only Super Admin can sign up directly");
       return;
     }
 
-    try {
-      await signup(name, email, password, selectedRole);
-      toast.success("Super Admin account created successfully!");
-      
-      // Navigate to superadmin dashboard
-      navigate("/superadmin/dashboard");
-    } catch (error) {
-      toast.error("Signup failed. Please try again.");
-    }
+    setLoading(true);
+
+   // In the handleSubmit function of Signup.tsx
+try {
+  await signup(name, email, password, selectedRole);
+  toast.success("Super Admin account created successfully! Please login to continue.");
+  
+  // Redirect to login page
+  navigate("/login");
+} catch (error: any) {
+  toast.error(error.message || "Signup failed. Please try again.");
+} finally {
+  setLoading(false);
+}
   };
 
   return (
@@ -68,7 +79,11 @@ const Signup = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="role">Select Role</Label>
-                <Select value={selectedRole || ""} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+                <Select 
+                  value={selectedRole || ""} 
+                  onValueChange={(value) => setSelectedRole(value as UserRole)}
+                  disabled={loading}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
@@ -93,6 +108,7 @@ const Signup = () => {
                     onChange={(e) => setName(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -109,6 +125,7 @@ const Signup = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -120,12 +137,13 @@ const Signup = () => {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Create a password"
+                    placeholder="Create a password (min. 6 characters)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
                     required
                     minLength={6}
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -143,12 +161,13 @@ const Signup = () => {
                     className="pl-10"
                     required
                     minLength={6}
+                    disabled={loading}
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                Create Super Admin Account
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Creating Account..." : "Create Super Admin Account"}
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">
@@ -160,7 +179,7 @@ const Signup = () => {
 
               <div className="mt-4 p-3 bg-muted/50 rounded-lg">
                 <p className="text-xs text-muted-foreground text-center">
-                  <strong>Note:</strong> Other roles (Admin, Manager, Supervisor, Employee) must be created by Super Admin through the user management system.
+                  <strong>Note:</strong> After creating your account, you'll be redirected to login page to sign in.
                 </p>
               </div>
             </form>

@@ -21,7 +21,9 @@ import {
   CheckCircle,
   FileText,
   Printer,
-  Send
+  Send,
+  Sheet,
+  MoreHorizontal
 } from "lucide-react";
 import { Employee, Payroll, SalaryStructure, SalarySlip, Attendance, Leave } from "./types";
 
@@ -35,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface PayrollTabProps {
   employees: Employee[];
@@ -68,6 +71,12 @@ const PayrollTab = ({
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [editingStructure, setEditingStructure] = useState<SalaryStructure | null>(null);
+  const [paymentStatusDialog, setPaymentStatusDialog] = useState<{ open: boolean; payroll: Payroll | null }>({ open: false, payroll: null });
+  const [paymentStatusForm, setPaymentStatusForm] = useState({
+    status: "paid",
+    paidAmount: "",
+    notes: ""
+  });
 
   // Dialog states
   const [processDialog, setProcessDialog] = useState<{ open: boolean; employee: Employee | null }>({ open: false, employee: null });
@@ -76,7 +85,7 @@ const PayrollTab = ({
   const [processAllDialog, setProcessAllDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; structure: SalaryStructure | null }>({ open: false, structure: null });
 
-  // Salary structure form state
+  // Salary structure form state - UPDATED TO MATCH IMAGE FORMAT
   const [structureForm, setStructureForm] = useState({
     employeeId: "",
     basicSalary: "",
@@ -89,7 +98,12 @@ const PayrollTab = ({
     providentFund: "",
     professionalTax: "",
     incomeTax: "",
-    otherDeductions: ""
+    otherDeductions: "",
+    leaveEncashment: "",
+    arrears: "",
+    esic: "",
+    advance: "",
+    mlwf: ""
   });
 
   // Calculate payroll summary with safe defaults
@@ -98,8 +112,10 @@ const PayrollTab = ({
     const processed = (payroll || []).filter(p => p.status === "processed").length;
     const pending = (payroll || []).filter(p => p.status === "pending").length;
     const paid = (payroll || []).filter(p => p.status === "paid").length;
+    const hold = (payroll || []).filter(p => p.status === "hold").length;
+    const partPaid = (payroll || []).filter(p => p.status === "part-paid").length;
 
-    return { total, processed, pending, paid };
+    return { total, processed, pending, paid, hold, partPaid };
   }, [payroll]);
 
   // Get employees with salary structure
@@ -191,11 +207,13 @@ const PayrollTab = ({
 
     // Allowances are usually fixed (not pro-rated based on attendance)
     const totalAllowances = (structure.hra || 0) + (structure.da || 0) + (structure.specialAllowance || 0) + 
-                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0);
+                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0) +
+                           (structure.leaveEncashment || 0) + (structure.arrears || 0);
     
     // Deductions are usually fixed
     const totalDeductions = (structure.providentFund || 0) + (structure.professionalTax || 0) + 
-                           (structure.incomeTax || 0) + (structure.otherDeductions || 0);
+                           (structure.incomeTax || 0) + (structure.otherDeductions || 0) +
+                           (structure.esic || 0) + (structure.advance || 0) + (structure.mlwf || 0);
 
     // CORRECTED: Total net salary = (Basic salary after attendance adjustment) + Allowances - Deductions
     // This includes the basic salary in the net salary calculation
@@ -217,9 +235,11 @@ const PayrollTab = ({
     const totalLeaves = getEmployeeLeaves(employeeId);
 
     const totalAllowances = (structure.hra || 0) + (structure.da || 0) + (structure.specialAllowance || 0) + 
-                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0);
+                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0) +
+                           (structure.leaveEncashment || 0) + (structure.arrears || 0);
     const totalDeductions = (structure.providentFund || 0) + (structure.professionalTax || 0) + 
-                           (structure.incomeTax || 0) + (structure.otherDeductions || 0);
+                           (structure.incomeTax || 0) + (structure.otherDeductions || 0) +
+                           (structure.esic || 0) + (structure.advance || 0) + (structure.mlwf || 0);
 
     const newPayroll: Payroll = {
       id: Date.now(),
@@ -234,23 +254,48 @@ const PayrollTab = ({
       presentDays: attendance.presentDays,
       absentDays: attendance.absentDays,
       halfDays: attendance.halfDays,
-      leaves: totalLeaves
+      leaves: totalLeaves,
+      paidAmount: calculatedSalary,
+      paymentStatus: "paid"
     };
 
     setPayroll(prev => [...(prev || []).filter(p => !(p.employeeId === employeeId && p.month === selectedMonth)), newPayroll]);
     setProcessDialog({ open: false, employee: null });
   };
 
-  // Mark salary as paid
-  const handleMarkAsPaid = (payrollId: number) => {
+  // Update payment status
+  const handleUpdatePaymentStatus = () => {
+    if (!paymentStatusDialog.payroll) return;
+
+    const updatedPayroll = {
+      ...paymentStatusDialog.payroll,
+      status: paymentStatusForm.status,
+      paidAmount: paymentStatusForm.status === "part-paid" ? parseFloat(paymentStatusForm.paidAmount) || 0 : paymentStatusDialog.payroll.netSalary,
+      paymentDate: paymentStatusForm.status === "paid" ? new Date().toISOString().split('T')[0] : "",
+      paymentStatus: paymentStatusForm.status,
+      notes: paymentStatusForm.notes
+    };
+
     setPayroll(prev => (prev || []).map(p => 
-      p.id === payrollId ? { 
-        ...p, 
-        status: "paid", 
-        paymentDate: new Date().toISOString().split('T')[0] 
-      } : p
+      p.id === updatedPayroll.id ? updatedPayroll : p
     ));
-    setPayDialog({ open: false, payroll: null });
+
+    setPaymentStatusDialog({ open: false, payroll: null });
+    setPaymentStatusForm({
+      status: "paid",
+      paidAmount: "",
+      notes: ""
+    });
+  };
+
+  // Open payment status dialog
+  const handleOpenPaymentStatus = (payroll: Payroll) => {
+    setPaymentStatusDialog({ open: true, payroll });
+    setPaymentStatusForm({
+      status: payroll.status,
+      paidAmount: payroll.paidAmount?.toString() || payroll.netSalary?.toString() || "",
+      notes: payroll.notes || ""
+    });
   };
 
   // Process payroll for all employees with salary structures
@@ -269,9 +314,11 @@ const PayrollTab = ({
           const totalLeaves = getEmployeeLeaves(emp.id);
 
           const totalAllowances = (structure.hra || 0) + (structure.da || 0) + (structure.specialAllowance || 0) + 
-                                (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0);
+                                (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0) +
+                                (structure.leaveEncashment || 0) + (structure.arrears || 0);
           const totalDeductions = (structure.providentFund || 0) + (structure.professionalTax || 0) + 
-                                (structure.incomeTax || 0) + (structure.otherDeductions || 0);
+                                (structure.incomeTax || 0) + (structure.otherDeductions || 0) +
+                                (structure.esic || 0) + (structure.advance || 0) + (structure.mlwf || 0);
 
           const newPayroll: Payroll = {
             id: Date.now() + emp.id, // Ensure unique ID
@@ -286,7 +333,9 @@ const PayrollTab = ({
             presentDays: attendance.presentDays,
             absentDays: attendance.absentDays,
             halfDays: attendance.halfDays,
-            leaves: totalLeaves
+            leaves: totalLeaves,
+            paidAmount: calculatedSalary,
+            paymentStatus: "paid"
           };
 
           setPayroll(prev => [...(prev || []).filter(p => !(p.employeeId === emp.id && p.month === selectedMonth)), newPayroll]);
@@ -319,6 +368,11 @@ const PayrollTab = ({
       professionalTax: parseFloat(structureForm.professionalTax) || 0,
       incomeTax: parseFloat(structureForm.incomeTax) || 0,
       otherDeductions: parseFloat(structureForm.otherDeductions) || 0,
+      leaveEncashment: parseFloat(structureForm.leaveEncashment) || 0,
+      arrears: parseFloat(structureForm.arrears) || 0,
+      esic: parseFloat(structureForm.esic) || 0,
+      advance: parseFloat(structureForm.advance) || 0,
+      mlwf: parseFloat(structureForm.mlwf) || 0
     };
 
     setSalaryStructures(prev => [...(prev || []), newStructure]);
@@ -335,7 +389,12 @@ const PayrollTab = ({
       providentFund: "",
       professionalTax: "",
       incomeTax: "",
-      otherDeductions: ""
+      otherDeductions: "",
+      leaveEncashment: "",
+      arrears: "",
+      esic: "",
+      advance: "",
+      mlwf: ""
     });
   };
 
@@ -356,6 +415,11 @@ const PayrollTab = ({
       professionalTax: parseFloat(structureForm.professionalTax) || 0,
       incomeTax: parseFloat(structureForm.incomeTax) || 0,
       otherDeductions: parseFloat(structureForm.otherDeductions) || 0,
+      leaveEncashment: parseFloat(structureForm.leaveEncashment) || 0,
+      arrears: parseFloat(structureForm.arrears) || 0,
+      esic: parseFloat(structureForm.esic) || 0,
+      advance: parseFloat(structureForm.advance) || 0,
+      mlwf: parseFloat(structureForm.mlwf) || 0
     };
 
     setSalaryStructures(prev => (prev || []).map(s => 
@@ -374,7 +438,12 @@ const PayrollTab = ({
       providentFund: "",
       professionalTax: "",
       incomeTax: "",
-      otherDeductions: ""
+      otherDeductions: "",
+      leaveEncashment: "",
+      arrears: "",
+      esic: "",
+      advance: "",
+      mlwf: ""
     });
   };
 
@@ -399,7 +468,12 @@ const PayrollTab = ({
       providentFund: (structure.providentFund || 0).toString(),
       professionalTax: (structure.professionalTax || 0).toString(),
       incomeTax: (structure.incomeTax || 0).toString(),
-      otherDeductions: (structure.otherDeductions || 0).toString()
+      otherDeductions: (structure.otherDeductions || 0).toString(),
+      leaveEncashment: (structure.leaveEncashment || 0).toString(),
+      arrears: (structure.arrears || 0).toString(),
+      esic: (structure.esic || 0).toString(),
+      advance: (structure.advance || 0).toString(),
+      mlwf: (structure.mlwf || 0).toString()
     });
   };
 
@@ -476,15 +550,16 @@ const PayrollTab = ({
         </head>
         <body>
           <div class="header">
-            <div class="company-name">COMPANY NAME</div>
+            <div class="company-name">S K ENTERPRISES</div>
             <div class="slip-title">SALARY SLIP</div>
-            <div>${slipDialog.salarySlip.month}</div>
+            <div>Period: ${slipDialog.salarySlip.month}</div>
+            <div>Wages Slip Rule 27(2) Maharashtra Minimum Wages Rules, 1963</div>
           </div>
           
           <div class="employee-info">
             <div>
-              <strong>Employee:</strong> ${employee.name}<br>
-              <strong>ID:</strong> ${employee.employeeId}<br>
+              <strong>Name:</strong> ${employee.name}<br>
+              <strong>Employee ID:</strong> ${employee.employeeId}<br>
               <strong>Department:</strong> ${employee.department}
             </div>
             <div>
@@ -492,39 +567,91 @@ const PayrollTab = ({
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">Earnings</div>
-            <table class="breakdown">
-              <tr>
-                <td>Basic Salary</td>
-                <td class="amount">₹${slipDialog.salarySlip.basicSalary.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>Allowances</td>
-                <td class="amount">₹${slipDialog.salarySlip.allowances.toLocaleString()}</td>
-              </tr>
-              <tr class="total">
-                <td>Gross Earnings</td>
-                <td class="amount">₹${(slipDialog.salarySlip.basicSalary + slipDialog.salarySlip.allowances).toLocaleString()}</td>
-              </tr>
-            </table>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <!-- Earnings Section -->
+            <div class="section">
+              <div class="section-title">EARNINGS</div>
+              <table class="breakdown">
+                <tr>
+                  <td>BASIC</td>
+                  <td class="amount">₹${slipDialog.salarySlip.basicSalary.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>DA</td>
+                  <td class="amount">₹${((structure?.da || 0) + (structure?.specialAllowance || 0)).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>HRA</td>
+                  <td class="amount">₹${(structure?.hra || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>CCA</td>
+                  <td class="amount">₹${(structure?.conveyance || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>BONUS</td>
+                  <td class="amount">₹${(structure?.specialAllowance || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>LEAVE</td>
+                  <td class="amount">₹${(structure?.leaveEncashment || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>MEDICAL</td>
+                  <td class="amount">₹${(structure?.medicalAllowance || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>ARREARS</td>
+                  <td class="amount">₹${(structure?.arrears || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>OTHER ALL</td>
+                  <td class="amount">₹${(structure?.otherAllowances || 0).toLocaleString()}</td>
+                </tr>
+                <tr class="total">
+                  <td><strong>TOTAL EARNINGS</strong></td>
+                  <td class="amount"><strong>₹${(slipDialog.salarySlip.basicSalary + slipDialog.salarySlip.allowances).toLocaleString()}</strong></td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Deductions Section -->
+            <div class="section">
+              <div class="section-title">DEDUCTIONS</div>
+              <table class="breakdown">
+                <tr>
+                  <td>PF</td>
+                  <td class="amount">-₹${(structure?.providentFund || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>ESIC</td>
+                  <td class="amount">-₹${(structure?.esic || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>ADVANCE</td>
+                  <td class="amount">-₹${(structure?.advance || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>MLWF</td>
+                  <td class="amount">-₹${(structure?.mlwf || 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Profession Tax</td>
+                  <td class="amount">-₹${(structure?.professionalTax || 0).toLocaleString()}</td>
+                </tr>
+                <tr class="total">
+                  <td><strong>TOTAL DEDUCTIONS</strong></td>
+                  <td class="amount"><strong>-₹${slipDialog.salarySlip.deductions.toLocaleString()}</strong></td>
+                </tr>
+              </table>
+            </div>
           </div>
 
           <div class="section">
-            <div class="section-title">Deductions</div>
-            <table class="breakdown">
-              <tr>
-                <td>Total Deductions</td>
-                <td class="amount">-₹${slipDialog.salarySlip.deductions.toLocaleString()}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div class="section">
-            <div class="section-title">Net Salary</div>
+            <div class="section-title">NET SALARY</div>
             <table class="breakdown">
               <tr class="total">
-                <td><strong>Net Payable</strong></td>
+                <td><strong>NET PAYABLE</strong></td>
                 <td class="amount"><strong>₹${slipDialog.salarySlip.netSalary.toLocaleString()}</strong></td>
               </tr>
             </table>
@@ -552,8 +679,9 @@ const PayrollTab = ({
             </div>
           </div>
 
-          <div class="no-print" style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
-            <p>This is a computer-generated document and does not require a signature.</p>
+          <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+            <p>Office No 505, Global Square, Deccan College Road, Yerwada, Pune 411006</p>
+            <p>THIS IS COMPUTER GENERATED SLIP NOT REQUIRED SIGNATURE & STAMP</p>
           </div>
         </body>
         </html>
@@ -571,8 +699,8 @@ const PayrollTab = ({
     setSlipDialog({ open: false, salarySlip: null });
   };
 
-  // Export payroll data
-  const handleExportPayroll = () => {
+  // Export payroll data to Excel format
+  const handleExportPayrollExcel = () => {
     if (!payroll || payroll.length === 0) {
       alert("No payroll data to export");
       return;
@@ -581,26 +709,80 @@ const PayrollTab = ({
     const payrollData = payroll.map(p => {
       const employee = (employees || []).find(e => e.id === p.employeeId);
       return {
-        "Employee ID": employee?.employeeId || "N/A",
-        "Employee Name": employee?.name || "N/A",
-        "Department": employee?.department || "N/A",
-        "Month": p.month || "N/A",
-        "Basic Salary": p.basicSalary || 0,
-        "Allowances": p.allowances || 0,
-        "Deductions": p.deductions || 0,
-        "Net Salary": p.netSalary || 0,
-        "Status": p.status || "N/A",
-        "Payment Date": p.paymentDate || "N/A",
-        "Present Days": p.presentDays || 0,
-        "Absent Days": p.absentDays || 0,
-        "Half Days": p.halfDays || 0,
-        "Leaves": p.leaves || 0
+        "SR": payroll.indexOf(p) + 1,
+        "BANK AC": employee?.accountNumber || "N/A",
+        "BRANCH": employee?.bankBranch || "N/A",
+        "IFSC CODE": employee?.ifscCode || "N/A",
+        "NAMES": employee?.name || "N/A",
+        "G": employee?.gender?.charAt(0) || "N/A",
+        "MONTH": p.month || "N/A",
+        "DEP": employee?.department || "N/A",
+        "STATUS": p.status?.toUpperCase() || "N/A",
+        "IN HAND": p.paidAmount || 0,
+        "DESG": employee?.position || "N/A",
+        "DAYS": p.presentDays || 0,
+        "OT": p.overtimeHours || 0,
+        "BASIC": p.basicSalary || 0,
+        "DA": p.da || 0,
+        "HRA": p.hra || 0,
+        "OTHER": p.otherAllowances || 0,
+        "LEAVE": p.leaves || 0,
+        "BONUS": p.bonus || 0,
+        "OT AMOUNT": p.overtimeAmount || 0,
+        "GROSS": (p.basicSalary || 0) + (p.allowances || 0),
+        "PF": p.providentFund || 0,
+        "ESIC": p.esic || 0,
+        "PT": p.professionalTax || 0,
+        "MLWF": p.mlwf || 0,
+        "ADVANCE": p.advance || 0,
+        "UNI & ID": p.uniformAndId || 0,
+        "FINE": p.fine || 0,
+        "DED": p.deductions || 0,
+        "OTHER DED": p.otherDeductions || 0,
+        "NET": p.netSalary || 0
       };
     });
 
+    // Add totals row
+    const totals = {
+      "SR": "TOTAL",
+      "BANK AC": "",
+      "BRANCH": "",
+      "IFSC CODE": "",
+      "NAMES": "",
+      "G": "",
+      "MONTH": "",
+      "DEP": "",
+      "STATUS": "",
+      "IN HAND": payrollData.reduce((sum, row) => sum + (row["IN HAND"] || 0), 0),
+      "DESG": "",
+      "DAYS": payrollData.reduce((sum, row) => sum + (row["DAYS"] || 0), 0),
+      "OT": payrollData.reduce((sum, row) => sum + (row["OT"] || 0), 0),
+      "BASIC": payrollData.reduce((sum, row) => sum + (row["BASIC"] || 0), 0),
+      "DA": payrollData.reduce((sum, row) => sum + (row["DA"] || 0), 0),
+      "HRA": payrollData.reduce((sum, row) => sum + (row["HRA"] || 0), 0),
+      "OTHER": payrollData.reduce((sum, row) => sum + (row["OTHER"] || 0), 0),
+      "LEAVE": payrollData.reduce((sum, row) => sum + (row["LEAVE"] || 0), 0),
+      "BONUS": payrollData.reduce((sum, row) => sum + (row["BONUS"] || 0), 0),
+      "OT AMOUNT": payrollData.reduce((sum, row) => sum + (row["OT AMOUNT"] || 0), 0),
+      "GROSS": payrollData.reduce((sum, row) => sum + (row["GROSS"] || 0), 0),
+      "PF": payrollData.reduce((sum, row) => sum + (row["PF"] || 0), 0),
+      "ESIC": payrollData.reduce((sum, row) => sum + (row["ESIC"] || 0), 0),
+      "PT": payrollData.reduce((sum, row) => sum + (row["PT"] || 0), 0),
+      "MLWF": payrollData.reduce((sum, row) => sum + (row["MLWF"] || 0), 0),
+      "ADVANCE": payrollData.reduce((sum, row) => sum + (row["ADVANCE"] || 0), 0),
+      "UNI & ID": payrollData.reduce((sum, row) => sum + (row["UNI & ID"] || 0), 0),
+      "FINE": payrollData.reduce((sum, row) => sum + (row["FINE"] || 0), 0),
+      "DED": payrollData.reduce((sum, row) => sum + (row["DED"] || 0), 0),
+      "OTHER DED": payrollData.reduce((sum, row) => sum + (row["OTHER DED"] || 0), 0),
+      "NET": payrollData.reduce((sum, row) => sum + (row["NET"] || 0), 0)
+    };
+
+    const exportData = [...payrollData, totals];
+
     const csvContent = [
-      Object.keys(payrollData[0] || {}).join(","),
-      ...payrollData.map(row => Object.values(row).join(","))
+      Object.keys(exportData[0] || {}).join(","),
+      ...exportData.map(row => Object.values(row).join(","))
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -617,12 +799,22 @@ const PayrollTab = ({
     const variants = {
       pending: "bg-yellow-100 text-yellow-800",
       processed: "bg-blue-100 text-blue-800",
-      paid: "bg-green-100 text-green-800"
+      paid: "bg-green-100 text-green-800",
+      hold: "bg-red-100 text-red-800",
+      "part-paid": "bg-orange-100 text-orange-800"
+    };
+
+    const statusLabels = {
+      pending: "Pending",
+      processed: "Processed",
+      paid: "Paid",
+      hold: "Hold",
+      "part-paid": "Part Paid"
     };
 
     return (
       <Badge variant="secondary" className={variants[status as keyof typeof variants]}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {statusLabels[status as keyof typeof statusLabels]}
       </Badge>
     );
   };
@@ -642,9 +834,11 @@ const PayrollTab = ({
     const calculatedSalary = calculateSalary(employeeId, structure);
 
     const totalAllowances = (structure.hra || 0) + (structure.da || 0) + (structure.specialAllowance || 0) + 
-                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0);
+                           (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0) +
+                           (structure.leaveEncashment || 0) + (structure.arrears || 0);
     const totalDeductions = (structure.providentFund || 0) + (structure.professionalTax || 0) + 
-                           (structure.incomeTax || 0) + (structure.otherDeductions || 0);
+                           (structure.incomeTax || 0) + (structure.otherDeductions || 0) +
+                           (structure.esic || 0) + (structure.advance || 0) + (structure.mlwf || 0);
 
     // Calculate daily rate and salary adjustments
     const dailyRate = structure.basicSalary / attendance.totalWorkingDays;
@@ -774,60 +968,86 @@ const PayrollTab = ({
         </DialogContent>
       </Dialog>
 
-      {/* Mark as Paid Dialog */}
-      <Dialog open={payDialog.open} onOpenChange={(open) => setPayDialog({ open, payroll: null })}>
+      {/* Payment Status Dialog */}
+      <Dialog open={paymentStatusDialog.open} onOpenChange={(open) => setPaymentStatusDialog({ open, payroll: null })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              Mark Salary as Paid
-            </DialogTitle>
+            <DialogTitle>Update Payment Status</DialogTitle>
             <DialogDescription>
-              Confirm salary payment for {getEmployeeDetails(payDialog.payroll?.employeeId || 0)?.name}
+              Update payment status for {getEmployeeDetails(paymentStatusDialog.payroll?.employeeId || 0)?.name}
             </DialogDescription>
           </DialogHeader>
           
-          {payDialog.payroll && (
+          {paymentStatusDialog.payroll && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 mb-2">
-                    ₹{payDialog.payroll.netSalary?.toLocaleString()}
+                  <div className="text-2xl font-bold text-gray-600 mb-2">
+                    ₹{paymentStatusDialog.payroll.netSalary?.toLocaleString()}
                   </div>
-                  <div className="text-sm text-green-700">
-                    Ready to mark as paid
+                  <div className="text-sm text-gray-700">
+                    Total Net Salary
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Employee:</span>
-                  <div>{getEmployeeDetails(payDialog.payroll.employeeId)?.name}</div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="paymentStatus">Payment Status</Label>
+                  <Select 
+                    value={paymentStatusForm.status} 
+                    onValueChange={(value) => setPaymentStatusForm(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="hold">Hold</SelectItem>
+                      <SelectItem value="part-paid">Part Paid</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <span className="font-medium">Month:</span>
-                  <div>{payDialog.payroll.month}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Payment Date:</span>
-                  <div>{new Date().toLocaleDateString()}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Status:</span>
-                  <div>{getStatusBadge("paid")}</div>
+
+                {paymentStatusForm.status === "part-paid" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="paidAmount">Paid Amount</Label>
+                    <Input
+                      id="paidAmount"
+                      type="number"
+                      placeholder="Enter paid amount"
+                      value={paymentStatusForm.paidAmount}
+                      onChange={(e) => setPaymentStatusForm(prev => ({ ...prev, paidAmount: e.target.value }))}
+                      max={paymentStatusDialog.payroll.netSalary}
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      Remaining: ₹{(
+                        (paymentStatusDialog.payroll.netSalary || 0) - 
+                        (parseFloat(paymentStatusForm.paidAmount) || 0)
+                      ).toLocaleString()}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes (Optional)</Label>
+                  <Input
+                    id="notes"
+                    placeholder="Add any notes..."
+                    value={paymentStatusForm.notes}
+                    onChange={(e) => setPaymentStatusForm(prev => ({ ...prev, notes: e.target.value }))}
+                  />
                 </div>
               </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPayDialog({ open: false, payroll: null })}>
+            <Button variant="outline" onClick={() => setPaymentStatusDialog({ open: false, payroll: null })}>
               Cancel
             </Button>
-            <Button onClick={() => payDialog.payroll && handleMarkAsPaid(payDialog.payroll.id)}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Confirm Payment
+            <Button onClick={handleUpdatePaymentStatus}>
+              Update Status
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1009,15 +1229,15 @@ const PayrollTab = ({
               <SelectItem value="2024-06">June 2024</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={handleExportPayroll}>
-            <Download className="mr-2 h-4 w-4" />
-            Export Payroll
+          <Button variant="outline" onClick={handleExportPayrollExcel}>
+            <Sheet className="mr-2 h-4 w-4" />
+            Export Excel
           </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Payroll</CardTitle>
@@ -1039,18 +1259,34 @@ const PayrollTab = ({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{payrollSummary.pending}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Paid</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{payrollSummary.paid}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Hold</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{payrollSummary.hold}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Part Paid</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{payrollSummary.partPaid}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{payrollSummary.pending}</div>
           </CardContent>
         </Card>
       </div>
@@ -1199,14 +1435,13 @@ const PayrollTab = ({
                                 payrollRecord ? (
                                   <>
                                     {getStatusBadge(payrollRecord.status)}
-                                    {payrollRecord.status === "processed" && (
-                                      <Button 
-                                        size="sm" 
-                                        onClick={() => setPayDialog({ open: true, payroll: payrollRecord })}
-                                      >
-                                        Mark Paid
-                                      </Button>
-                                    )}
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => handleOpenPaymentStatus(payrollRecord)}
+                                    >
+                                      Status
+                                    </Button>
                                     <Button 
                                       size="sm" 
                                       variant="outline"
@@ -1246,7 +1481,7 @@ const PayrollTab = ({
               </Table>
             </TabsContent>
 
-            {/* Salary Structures Tab */}
+            {/* Salary Structures Tab - UPDATED TO MATCH IMAGE FORMAT */}
             <TabsContent value="salary-structures" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Salary Structures</h3>
@@ -1256,7 +1491,7 @@ const PayrollTab = ({
                 </Button>
               </div>
 
-              {/* Add/Edit Salary Structure Form */}
+              {/* Add/Edit Salary Structure Form - UPDATED TO MATCH IMAGE */}
               {(isAddingStructure || editingStructure) && (
                 <Card>
                   <CardHeader>
@@ -1264,159 +1499,297 @@ const PayrollTab = ({
                       {editingStructure ? "Edit Salary Structure" : "Add Salary Structure"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="employeeId">Employee</Label>
-                        <Select 
-                          value={structureForm.employeeId} 
-                          onValueChange={(value) => setStructureForm(prev => ({ ...prev, employeeId: value }))}
-                          disabled={!!editingStructure}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select employee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {employeesWithoutStructure.map(employee => (
-                              <SelectItem key={employee.id} value={employee.id.toString()}>
-                                {employee.name} ({employee.employeeId})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="employeeId">Employee *</Label>
+                      <Select 
+                        value={structureForm.employeeId} 
+                        onValueChange={(value) => setStructureForm(prev => ({ ...prev, employeeId: value }))}
+                        disabled={!!editingStructure}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {employeesWithoutStructure.map(employee => (
+                            <SelectItem key={employee.id} value={employee.id.toString()}>
+                              {employee.name} ({employee.employeeId})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Earnings Section - Matching the image format */}
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-4 text-lg">EARNINGS</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="basic" className="font-medium">BASIC *</Label>
+                            <Input
+                              id="basic"
+                              type="number"
+                              placeholder="Basic Salary"
+                              value={structureForm.basicSalary}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, basicSalary: e.target.value }))}
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="da" className="font-medium">DA</Label>
+                            <Input
+                              id="da"
+                              type="number"
+                              placeholder="Dearness Allowance"
+                              value={structureForm.da}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, da: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="hra" className="font-medium">HRA</Label>
+                            <Input
+                              id="hra"
+                              type="number"
+                              placeholder="House Rent Allowance"
+                              value={structureForm.hra}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, hra: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="cca" className="font-medium">CCA</Label>
+                            <Input
+                              id="cca"
+                              type="number"
+                              placeholder="City Compensatory Allowance"
+                              value={structureForm.conveyance}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, conveyance: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="medical" className="font-medium">MEDICAL</Label>
+                            <Input
+                              id="medical"
+                              type="number"
+                              placeholder="Medical Allowance"
+                              value={structureForm.medicalAllowance}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, medicalAllowance: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="otherAll" className="font-medium">OTHER ALL</Label>
+                            <Input
+                              id="otherAll"
+                              type="number"
+                              placeholder="Other Allowances"
+                              value={structureForm.otherAllowances}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, otherAllowances: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Additional Earnings from Image */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="bonus" className="font-medium">BONUS</Label>
+                            <Input
+                              id="bonus"
+                              type="number"
+                              placeholder="Bonus"
+                              value={structureForm.specialAllowance}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, specialAllowance: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="leave" className="font-medium">LEAVE</Label>
+                            <Input
+                              id="leave"
+                              type="number"
+                              placeholder="Leave Encashment"
+                              value={structureForm.leaveEncashment}
+                              onChange={(e) => setStructureForm(prev => ({ 
+                                ...prev, 
+                                leaveEncashment: e.target.value 
+                              }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="arrears" className="font-medium">ARREARS</Label>
+                            <Input
+                              id="arrears"
+                              type="number"
+                              placeholder="Arrears"
+                              value={structureForm.arrears}
+                              onChange={(e) => setStructureForm(prev => ({ 
+                                ...prev, 
+                                arrears: e.target.value 
+                              }))}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="basicSalary">Basic Salary *</Label>
-                        <Input
-                          id="basicSalary"
-                          type="number"
-                          placeholder="Basic Salary"
-                          value={structureForm.basicSalary}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, basicSalary: e.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hra">HRA</Label>
-                        <Input
-                          id="hra"
-                          type="number"
-                          placeholder="House Rent Allowance"
-                          value={structureForm.hra}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, hra: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="da">DA</Label>
-                        <Input
-                          id="da"
-                          type="number"
-                          placeholder="Dearness Allowance"
-                          value={structureForm.da}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, da: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="specialAllowance">Special Allowance</Label>
-                        <Input
-                          id="specialAllowance"
-                          type="number"
-                          placeholder="Special Allowance"
-                          value={structureForm.specialAllowance}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, specialAllowance: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="conveyance">Conveyance</Label>
-                        <Input
-                          id="conveyance"
-                          type="number"
-                          placeholder="Conveyance"
-                          value={structureForm.conveyance}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, conveyance: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="medicalAllowance">Medical Allowance</Label>
-                        <Input
-                          id="medicalAllowance"
-                          type="number"
-                          placeholder="Medical Allowance"
-                          value={structureForm.medicalAllowance}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, medicalAllowance: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="otherAllowances">Other Allowances</Label>
-                        <Input
-                          id="otherAllowances"
-                          type="number"
-                          placeholder="Other Allowances"
-                          value={structureForm.otherAllowances}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, otherAllowances: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="providentFund">Provident Fund</Label>
-                        <Input
-                          id="providentFund"
-                          type="number"
-                          placeholder="Provident Fund"
-                          value={structureForm.providentFund}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, providentFund: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="professionalTax">Professional Tax</Label>
-                        <Input
-                          id="professionalTax"
-                          type="number"
-                          placeholder="Professional Tax"
-                          value={structureForm.professionalTax}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, professionalTax: e.target.value }))}
-                        />
+                    {/* Deductions Section - Matching the image format */}
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-4 text-lg">DEDUCTIONS</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="pf" className="font-medium">PF</Label>
+                            <Input
+                              id="pf"
+                              type="number"
+                              placeholder="Provident Fund"
+                              value={structureForm.providentFund}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, providentFund: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="esic" className="font-medium">ESIC</Label>
+                            <Input
+                              id="esic"
+                              type="number"
+                              placeholder="ESIC Contribution"
+                              value={structureForm.esic}
+                              onChange={(e) => setStructureForm(prev => ({ 
+                                ...prev, 
+                                esic: e.target.value 
+                              }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="advance" className="font-medium">ADVANCE</Label>
+                            <Input
+                              id="advance"
+                              type="number"
+                              placeholder="Advance Deduction"
+                              value={structureForm.advance}
+                              onChange={(e) => setStructureForm(prev => ({ 
+                                ...prev, 
+                                advance: e.target.value 
+                              }))}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="mlwf" className="font-medium">MLWF</Label>
+                            <Input
+                              id="mlwf"
+                              type="number"
+                              placeholder="MLWF Deduction"
+                              value={structureForm.mlwf}
+                              onChange={(e) => setStructureForm(prev => ({ 
+                                ...prev, 
+                                mlwf: e.target.value 
+                              }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="professionTax" className="font-medium">Profession Tax</Label>
+                            <Input
+                              id="professionTax"
+                              type="number"
+                              placeholder="Professional Tax"
+                              value={structureForm.professionalTax}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, professionalTax: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="incomeTax" className="font-medium">INCOME TAX</Label>
+                            <Input
+                              id="incomeTax"
+                              type="number"
+                              placeholder="Income Tax"
+                              value={structureForm.incomeTax}
+                              onChange={(e) => setStructureForm(prev => ({ ...prev, incomeTax: e.target.value }))}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="incomeTax">Income Tax</Label>
-                        <Input
-                          id="incomeTax"
-                          type="number"
-                          placeholder="Income Tax"
-                          value={structureForm.incomeTax}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, incomeTax: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="otherDeductions">Other Deductions</Label>
-                        <Input
-                          id="otherDeductions"
-                          type="number"
-                          placeholder="Other Deductions"
-                          value={structureForm.otherDeductions}
-                          onChange={(e) => setStructureForm(prev => ({ ...prev, otherDeductions: e.target.value }))}
-                        />
+                    {/* Summary Section */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="font-semibold mb-3">Summary</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span>Total Earnings:</span>
+                            <span className="font-medium text-green-600">
+                              ₹{(
+                                (parseFloat(structureForm.basicSalary) || 0) +
+                                (parseFloat(structureForm.da) || 0) +
+                                (parseFloat(structureForm.hra) || 0) +
+                                (parseFloat(structureForm.conveyance) || 0) +
+                                (parseFloat(structureForm.medicalAllowance) || 0) +
+                                (parseFloat(structureForm.otherAllowances) || 0) +
+                                (parseFloat(structureForm.specialAllowance) || 0) +
+                                (parseFloat(structureForm.leaveEncashment) || 0) +
+                                (parseFloat(structureForm.arrears) || 0)
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Total Deductions:</span>
+                            <span className="font-medium text-red-600">
+                              ₹{(
+                                (parseFloat(structureForm.providentFund) || 0) +
+                                (parseFloat(structureForm.esic) || 0) +
+                                (parseFloat(structureForm.advance) || 0) +
+                                (parseFloat(structureForm.mlwf) || 0) +
+                                (parseFloat(structureForm.professionalTax) || 0) +
+                                (parseFloat(structureForm.incomeTax) || 0) +
+                                (parseFloat(structureForm.otherDeductions) || 0)
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between border-t pt-2">
+                            <span className="font-semibold">Net Salary:</span>
+                            <span className="font-bold text-lg">
+                              ₹{(
+                                (
+                                  (parseFloat(structureForm.basicSalary) || 0) +
+                                  (parseFloat(structureForm.da) || 0) +
+                                  (parseFloat(structureForm.hra) || 0) +
+                                  (parseFloat(structureForm.conveyance) || 0) +
+                                  (parseFloat(structureForm.medicalAllowance) || 0) +
+                                  (parseFloat(structureForm.otherAllowances) || 0) +
+                                  (parseFloat(structureForm.specialAllowance) || 0) +
+                                  (parseFloat(structureForm.leaveEncashment) || 0) +
+                                  (parseFloat(structureForm.arrears) || 0)
+                                ) - (
+                                  (parseFloat(structureForm.providentFund) || 0) +
+                                  (parseFloat(structureForm.esic) || 0) +
+                                  (parseFloat(structureForm.advance) || 0) +
+                                  (parseFloat(structureForm.mlwf) || 0) +
+                                  (parseFloat(structureForm.professionalTax) || 0) +
+                                  (parseFloat(structureForm.incomeTax) || 0) +
+                                  (parseFloat(structureForm.otherDeductions) || 0)
+                                )
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-4">
                       <Button 
                         onClick={editingStructure ? handleUpdateStructure : handleAddStructure}
-                        disabled={!structureForm.basicSalary}
+                        disabled={!structureForm.basicSalary || !structureForm.employeeId}
+                        className="flex-1"
                       >
                         {editingStructure ? "Update Structure" : "Add Structure"}
                       </Button>
@@ -1437,9 +1810,15 @@ const PayrollTab = ({
                             providentFund: "",
                             professionalTax: "",
                             incomeTax: "",
-                            otherDeductions: ""
+                            otherDeductions: "",
+                            leaveEncashment: "",
+                            arrears: "",
+                            esic: "",
+                            advance: "",
+                            mlwf: ""
                           });
                         }}
+                        className="flex-1"
                       >
                         Cancel
                       </Button>
@@ -1471,9 +1850,11 @@ const PayrollTab = ({
                     (salaryStructures || []).map((structure) => {
                       const employee = (employees || []).find(e => e.id === structure.employeeId);
                       const totalAllowances = (structure.hra || 0) + (structure.da || 0) + (structure.specialAllowance || 0) + 
-                                            (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0);
+                                            (structure.conveyance || 0) + (structure.medicalAllowance || 0) + (structure.otherAllowances || 0) +
+                                            (structure.leaveEncashment || 0) + (structure.arrears || 0);
                       const totalDeductions = (structure.providentFund || 0) + (structure.professionalTax || 0) + 
-                                            (structure.incomeTax || 0) + (structure.otherDeductions || 0);
+                                            (structure.incomeTax || 0) + (structure.otherDeductions || 0) +
+                                            (structure.esic || 0) + (structure.advance || 0) + (structure.mlwf || 0);
                       const totalCTC = (structure.basicSalary || 0) + totalAllowances;
 
                       if (!employee) return null;
@@ -1536,7 +1917,7 @@ const PayrollTab = ({
               </Table>
             </TabsContent>
 
-            {/* Payroll Records Tab */}
+            {/* Payroll Records Tab - UPDATED FORMAT */}
             <TabsContent value="payroll-records" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Payroll Records - {selectedMonth}</h3>
@@ -1545,101 +1926,214 @@ const PayrollTab = ({
                 </div>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Month</TableHead>
-                    <TableHead>Basic Salary</TableHead>
-                    <TableHead>Allowances</TableHead>
-                    <TableHead>Deductions</TableHead>
-                    <TableHead>Net Salary</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Payment Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(payroll || []).filter(p => p.month === selectedMonth).length === 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        No payroll records found for {selectedMonth}
-                      </TableCell>
+                      <TableHead className="w-12">SR</TableHead>
+                      <TableHead>BANK AC</TableHead>
+                      <TableHead>BRANCH</TableHead>
+                      <TableHead>IFSC CODE</TableHead>
+                      <TableHead>NAMES</TableHead>
+                      <TableHead className="w-8">G</TableHead>
+                      <TableHead>MONTH</TableHead>
+                      <TableHead>DEP</TableHead>
+                      <TableHead>STATUS</TableHead>
+                      <TableHead>IN HAND</TableHead>
+                      <TableHead>DESG</TableHead>
+                      <TableHead>DAYS</TableHead>
+                      <TableHead>OT</TableHead>
+                      <TableHead>BASIC</TableHead>
+                      <TableHead>DA</TableHead>
+                      <TableHead>HRA</TableHead>
+                      <TableHead>OTHER</TableHead>
+                      <TableHead>LEAVE</TableHead>
+                      <TableHead>BONUS</TableHead>
+                      <TableHead>OT AMOUNT</TableHead>
+                      <TableHead>GROSS</TableHead>
+                      <TableHead>PF</TableHead>
+                      <TableHead>ESIC</TableHead>
+                      <TableHead>PT</TableHead>
+                      <TableHead>MLWF</TableHead>
+                      <TableHead>ADVANCE</TableHead>
+                      <TableHead>UNI & ID</TableHead>
+                      <TableHead>FINE</TableHead>
+                      <TableHead>DED</TableHead>
+                      <TableHead>OTHER DED</TableHead>
+                      <TableHead>NET</TableHead>
+                      <TableHead>ACTIONS</TableHead>
                     </TableRow>
-                  ) : (
-                    (payroll || [])
-                      .filter(p => p.month === selectedMonth)
-                      .map((record) => {
-                        const employee = (employees || []).find(e => e.id === record.employeeId);
-                        if (!employee) return null;
+                  </TableHeader>
+                  <TableBody>
+                    {(payroll || []).filter(p => p.month === selectedMonth).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={32} className="text-center py-8 text-muted-foreground">
+                          No payroll records found for {selectedMonth}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      (payroll || [])
+                        .filter(p => p.month === selectedMonth)
+                        .map((record, index) => {
+                          const employee = (employees || []).find(e => e.id === record.employeeId);
+                          if (!employee) return null;
 
-                        return (
-                          <TableRow key={record.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{employee.name}</div>
-                                <div className="text-sm text-muted-foreground">{employee.employeeId}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>{record.month}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <IndianRupee className="h-4 w-4 mr-1" />
-                                {(record.basicSalary || 0).toLocaleString()}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <IndianRupee className="h-4 w-4 mr-1" />
-                                {(record.allowances || 0).toLocaleString()}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <IndianRupee className="h-4 w-4 mr-1" />
-                                {(record.deductions || 0).toLocaleString()}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium flex items-center">
-                                <IndianRupee className="h-4 w-4 mr-1" />
-                                {(record.netSalary || 0).toLocaleString()}
-                              </div>
-                            </TableCell>
-                            <TableCell>{getStatusBadge(record.status)}</TableCell>
-                            <TableCell>{record.paymentDate || "-"}</TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                {record.status === "processed" && (
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => setPayDialog({ open: true, payroll: record })}
-                                  >
-                                    Mark Paid
-                                  </Button>
-                                )}
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => {
-                                    const slip = (salarySlips || []).find(s => s.payrollId === record.id);
-                                    if (slip) {
-                                      handleViewSalarySlip(slip);
-                                    } else {
-                                      handleGenerateSalarySlip(record.id);
-                                    }
-                                  }}
-                                >
-                                  {salarySlips.find(s => s.payrollId === record.id) ? "View Slip" : "Generate Slip"}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                  )}
-                </TableBody>
-              </Table>
+                          const grossSalary = (record.basicSalary || 0) + (record.allowances || 0);
+
+                          return (
+                            <TableRow key={record.id}>
+                              <TableCell className="font-medium">{index + 1}</TableCell>
+                              <TableCell>{employee.accountNumber || "N/A"}</TableCell>
+                              <TableCell>{employee.bankBranch || "N/A"}</TableCell>
+                              <TableCell>{employee.ifscCode || "N/A"}</TableCell>
+                              <TableCell className="font-medium">{employee.name}</TableCell>
+                              <TableCell>{employee.gender?.charAt(0) || "N/A"}</TableCell>
+                              <TableCell>{record.month}</TableCell>
+                              <TableCell>{employee.department}</TableCell>
+                              <TableCell>{getStatusBadge(record.status)}</TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.paidAmount || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>{employee.position}</TableCell>
+                              <TableCell>{record.presentDays || 0}</TableCell>
+                              <TableCell>{record.overtimeHours || 0}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.basicSalary || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.da || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.hra || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.otherAllowances || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>{record.leaves || 0}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.bonus || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.overtimeAmount || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {grossSalary.toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.providentFund || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.esic || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.professionalTax || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.mlwf || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.advance || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.uniformAndId || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.fine || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.deductions || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-3 w-3 mr-1" />
+                                  {(record.otherDeductions || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center">
+                                  <IndianRupee className="h-4 w-4 mr-1" />
+                                  {(record.netSalary || 0).toLocaleString()}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleOpenPaymentStatus(record)}>
+                                      Update Status
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                      const slip = (salarySlips || []).find(s => s.payrollId === record.id);
+                                      if (slip) {
+                                        handleViewSalarySlip(slip);
+                                      } else {
+                                        handleGenerateSalarySlip(record.id);
+                                      }
+                                    }}>
+                                      {salarySlips.find(s => s.payrollId === record.id) ? "View Slip" : "Generate Slip"}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

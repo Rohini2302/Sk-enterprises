@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Calendar, Clock, Edit, Trash2, Filter, Download } from "lucide-react";
+import { Plus, Calendar, Clock, Edit, Trash2, Filter, Download, User, Hash, Building } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -30,7 +30,10 @@ const Leave = () => {
       status: "pending", 
       reason: "Family vacation",
       appliedDate: "2025-01-15",
-      leaveType: "annual"
+      leaveType: "annual",
+      department: "Staff",
+      employeeName: "John Doe",
+      employeeId: "EMP-001"
     },
     { 
       id: 2, 
@@ -41,7 +44,10 @@ const Leave = () => {
       status: "approved", 
       reason: "Medical treatment",
       appliedDate: "2024-12-20",
-      leaveType: "sick"
+      leaveType: "sick",
+      department: "Supervisor",
+      employeeName: "Jane Smith",
+      employeeId: "EMP-002"
     },
     { 
       id: 3, 
@@ -52,7 +58,24 @@ const Leave = () => {
       status: "rejected", 
       reason: "Personal work",
       appliedDate: "2025-02-15",
-      leaveType: "casual"
+      leaveType: "casual",
+      department: "Staff",
+      employeeName: "Robert Johnson",
+      employeeId: "EMP-003"
+    },
+    { 
+      id: 4, 
+      type: "Annual Leave", 
+      from: "2025-03-10", 
+      to: "2025-03-15", 
+      days: 5, 
+      status: "pending", 
+      reason: "Team building retreat",
+      appliedDate: "2025-02-25",
+      leaveType: "annual",
+      department: "Supervisor",
+      employeeName: "Michael Brown",
+      employeeId: "EMP-004"
     },
   ]);
 
@@ -113,7 +136,10 @@ const Leave = () => {
       status: "pending" as const,
       reason: formData.reason,
       appliedDate: new Date().toISOString().split('T')[0],
-      leaveType: formData.type
+      leaveType: formData.type,
+      department: "Staff", // Default to Staff for new requests
+      employeeName: "Current User", // This should be replaced with actual user data
+      employeeId: "EMP-000" // This should be replaced with actual user data
     };
 
     setLeaveRequests(prev => [newLeave, ...prev]);
@@ -183,6 +209,30 @@ const Leave = () => {
     setTimeout(() => {
       toast.success("Leave data exported successfully!");
     }, 1500);
+  };
+
+  const handleAccept = () => {
+    if (editingLeave) {
+      setLeaveRequests(prev => prev.map(leave => 
+        leave.id === editingLeave.id ? { ...leave, status: "approved" } : leave
+      ));
+      toast.success("Leave request accepted!");
+      setEditDialogOpen(false);
+      setEditingLeave(null);
+      setFormData({ type: "", from: "", to: "", reason: "" });
+    }
+  };
+
+  const handleReject = () => {
+    if (editingLeave) {
+      setLeaveRequests(prev => prev.map(leave => 
+        leave.id === editingLeave.id ? { ...leave, status: "rejected" } : leave
+      ));
+      toast.success("Leave request rejected!");
+      setEditDialogOpen(false);
+      setEditingLeave(null);
+      setFormData({ type: "", from: "", to: "", reason: "" });
+    }
   };
 
   const getStatusVariant = (status: string) => {
@@ -374,7 +424,7 @@ const Leave = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>My Leave Requests</span>
+              <span>Leave Requests (Supervisor & Staff)</span>
               <Badge variant="outline">
                 {filteredLeaves.length} requests
               </Badge>
@@ -402,8 +452,22 @@ const Leave = () => {
                           <Badge className={getStatusColor(leave.status)}>
                             {leave.status}
                           </Badge>
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Building className="h-3 w-3" />
+                            {leave.department}
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {leave.employeeName}
+                          </div>
+                          <span>•</span>
+                          <div className="flex items-center gap-1">
+                            <Hash className="h-3 w-3" />
+                            {leave.employeeId}
+                          </div>
+                          <span>•</span>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {leave.from} to {leave.to}
@@ -468,68 +532,143 @@ const Leave = () => {
 
         {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Edit Leave Request</DialogTitle>
+              <DialogTitle>Review Leave Request</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-type">Leave Type</Label>
-                <Select 
-                  required 
-                  value={formData.type}
-                  onValueChange={(value) => handleInputChange("type", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="annual">Annual Leave</SelectItem>
-                    <SelectItem value="sick">Sick Leave</SelectItem>
-                    <SelectItem value="casual">Casual Leave</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-from">From Date</Label>
-                  <Input 
-                    id="edit-from" 
-                    type="date" 
-                    required 
-                    value={formData.from}
-                    onChange={(e) => handleInputChange("from", e.target.value)}
-                  />
+            {editingLeave && (
+              <div className="space-y-6">
+                {/* Employee Information Section */}
+                <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                  <h3 className="font-medium text-lg">Employee Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building className="h-4 w-4" />
+                        <span>Department</span>
+                      </div>
+                      <div className="font-medium">{editingLeave.department}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <User className="h-4 w-4" />
+                        <span>Employee Name</span>
+                      </div>
+                      <div className="font-medium">{editingLeave.employeeName}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Hash className="h-4 w-4" />
+                        <span>Employee ID</span>
+                      </div>
+                      <div className="font-medium">{editingLeave.employeeId}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>Applied Date</span>
+                      </div>
+                      <div className="font-medium">{editingLeave.appliedDate}</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-to">To Date</Label>
-                  <Input 
-                    id="edit-to" 
-                    type="date" 
-                    required 
-                    value={formData.to}
-                    onChange={(e) => handleInputChange("to", e.target.value)}
-                  />
+
+                {/* Leave Details Section */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-lg">Leave Details</h3>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-type">Leave Type</Label>
+                    <Select 
+                      required 
+                      value={formData.type}
+                      onValueChange={(value) => handleInputChange("type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="annual">Annual Leave</SelectItem>
+                        <SelectItem value="sick">Sick Leave</SelectItem>
+                        <SelectItem value="casual">Casual Leave</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-from">From Date</Label>
+                      <Input 
+                        id="edit-from" 
+                        type="date" 
+                        required 
+                        value={formData.from}
+                        onChange={(e) => handleInputChange("from", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-to">To Date</Label>
+                      <Input 
+                        id="edit-to" 
+                        type="date" 
+                        required 
+                        value={formData.to}
+                        onChange={(e) => handleInputChange("to", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {formData.from && formData.to && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Total days: {calculateDays(formData.from, formData.to)}
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-reason">Reason</Label>
+                    <Textarea 
+                      id="edit-reason" 
+                      placeholder="Enter reason for leave" 
+                      required 
+                      value={formData.reason}
+                      onChange={(e) => handleInputChange("reason", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => {
+                      setEditDialogOpen(false);
+                      setEditingLeave(null);
+                      setFormData({ type: "", from: "", to: "", reason: "" });
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    className="flex-1"
+                    onClick={handleReject}
+                  >
+                    Reject Request
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={handleAccept}
+                  >
+                    Accept Request
+                  </Button>
                 </div>
               </div>
-              {formData.from && formData.to && (
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Total days: {calculateDays(formData.from, formData.to)}
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="edit-reason">Reason</Label>
-                <Textarea 
-                  id="edit-reason" 
-                  placeholder="Enter reason for leave" 
-                  required 
-                  value={formData.reason}
-                  onChange={(e) => handleInputChange("reason", e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full">Update Request</Button>
-            </form>
+            )}
           </DialogContent>
         </Dialog>
       </motion.div>

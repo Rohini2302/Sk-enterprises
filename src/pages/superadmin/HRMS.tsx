@@ -988,7 +988,7 @@ const HRMS = () => {
             <TabsTrigger value="leave" className="flex-1 min-w-[120px]">Leave Management</TabsTrigger>
             <TabsTrigger value="shifts" className="flex-1 min-w-[120px]">Shift Roster</TabsTrigger>
             <TabsTrigger value="payroll" className="flex-1 min-w-[120px]">Payroll</TabsTrigger>
-            <TabsTrigger value="performance" className="flex-1 min-w-[120px]">Performance</TabsTrigger>
+            <TabsTrigger value="performance" className="flex-1 min-w-[120px]">Deduction</TabsTrigger>
             <TabsTrigger value="reports" className="flex-1 min-w-[120px]">Reports</TabsTrigger>
           </TabsList>
 

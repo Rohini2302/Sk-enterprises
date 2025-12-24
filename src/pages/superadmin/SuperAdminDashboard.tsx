@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -29,7 +29,10 @@ import {
   PieChart,
   ChevronsLeft,
   ChevronsRight,
-  Download
+  Download,
+  FileText,
+  Receipt,
+  AlertTriangle
 } from 'lucide-react';
 
 // Recharts for charts
@@ -134,10 +137,9 @@ const departmentViewData = [
 
 // Outstanding Amount Data
 const outstandingData = {
-  totalOutstanding: 1850000,
-  totalParties: 6,
-  pending: 4,
-  overdue: 2
+  totalInvoices: 45,
+  receivedTotalAmount: 3250000,
+  totalOutstandingDue: 1850000
 };
 
 // Site Names Data
@@ -318,18 +320,22 @@ const Pagination = ({
 // Excel export utility function
 const exportToExcel = (data: any[], filename: string) => {
   // Create CSV content
-  const headers = ['Site Name', 'Billing Amount (₹)', 'Total Paid (₹)', 'Hold Salary (₹)', 'Status', 'Remark'];
+  const headers = ['Site Name', 'Billing Amount (₹)', 'Total Paid (₹)', 'Hold Salary (₹)', 'Difference (₹)', 'Status', 'Remark'];
   
   const csvContent = [
     headers.join(','),
-    ...data.map(item => [
-      `"${item.siteName}"`,
-      item.billingAmount,
-      item.totalPaid,
-      item.holdSalary,
-      item.status,
-      `"${item.remark}"`
-    ].join(','))
+    ...data.map(item => {
+      const difference = item.billingAmount - item.totalPaid + item.holdSalary;
+      return [
+        `"${item.siteName}"`,
+        item.billingAmount,
+        item.totalPaid,
+        item.holdSalary,
+        difference,
+        item.status,
+        `"${item.remark}"`
+      ].join(',');
+    })
   ].join('\n');
 
   // Create blob and download
@@ -383,11 +389,13 @@ const SuperAdminDashboard = () => {
     const totalBilling = payrollData.reduce((sum, item) => sum + item.billingAmount, 0);
     const totalPaid = payrollData.reduce((sum, item) => sum + item.totalPaid, 0);
     const totalHold = payrollData.reduce((sum, item) => sum + item.holdSalary, 0);
+    const totalDifference = payrollData.reduce((sum, item) => sum + (item.billingAmount - item.totalPaid + item.holdSalary), 0);
     
     return {
       totalBilling,
       totalPaid,
       totalHold,
+      totalDifference,
       completionRate: ((totalPaid / totalBilling) * 100).toFixed(1)
     };
   }, [payrollData]);
@@ -489,15 +497,20 @@ const SuperAdminDashboard = () => {
     toast.success(`Payroll data exported to ${filename}`);
   };
 
-  // Handle pie chart click to redirect to HRMS
-  const handlePieChartClick = () => {
-    navigate('/superadmin/hrms');
+  // Handle pie chart click to redirect to site-wise attendance with selected date
+  const handlePieChartClick = (date?: string) => {
+    const selectedDate = date || currentDayData.date;
+    navigate(`/superadmin/attendaceview?view=site&date=${selectedDate}`);
+  };
+
+  // Handle small pie chart click with specific date
+  const handleSmallPieChartClick = (dayData: any) => {
+    navigate(`/superadmin/attendaceview?view=site&date=${dayData.date}`);
   };
 
   // Handle department card click to redirect to department wise attendance
   const handleDepartmentCardClick = (department: string) => {
-    localStorage.setItem('selectedDepartment', department);
-    navigate('/superadmin/attendaceview');
+    navigate(`/superadmin/attendaceview?view=department&department=${department}&date=Today`);
   };
 
   // Custom tooltip for pie chart
@@ -542,6 +555,11 @@ const SuperAdminDashboard = () => {
     }).format(amount);
   };
 
+  // Calculate difference for a payroll item
+  const calculateDifference = (item: any) => {
+    return item.billingAmount - item.totalPaid + item.holdSalary;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
@@ -564,7 +582,7 @@ const SuperAdminDashboard = () => {
                 7 Days Attendance Rate
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Present vs Absent ratio for the last 7 days. Click on charts to view details in HRMS.
+                Present vs Absent ratio for the last 7 days. Click on charts to view site-wise attendance details for that specific day.
               </p>
             </CardHeader>
             <CardContent className="px-4 sm:px-6">
@@ -610,7 +628,7 @@ const SuperAdminDashboard = () => {
                       <Card 
                         key={`${dayData.date}-${index}`}
                         className="cursor-pointer transform transition-all duration-200 hover:scale-105"
-                        onClick={handlePieChartClick}
+                        onClick={() => handleSmallPieChartClick(dayData)}
                       >
                         <CardContent className="p-3">
                           <div className="text-center mb-2">
@@ -710,7 +728,7 @@ const SuperAdminDashboard = () => {
 
                 <div 
                   className="cursor-pointer transform transition-all duration-200 hover:scale-105"
-                  onClick={handlePieChartClick}
+                  onClick={() => handlePieChartClick(currentDayData.date)}
                 >
                   <div className="w-full h-80 sm:h-96 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-4 border-2 border-blue-100 hover:border-blue-300 transition-colors">
                     <ResponsiveContainer width="100%" height="100%">
@@ -737,7 +755,7 @@ const SuperAdminDashboard = () => {
                 </div>
                 <div className="text-center mt-4">
                   <p className="text-sm text-muted-foreground">
-                    Click on the chart to view detailed attendance in HRMS
+                    Click on the chart to view site-wise attendance details for {currentDayData.date}
                   </p>
                 </div>
               </div>
@@ -755,7 +773,7 @@ const SuperAdminDashboard = () => {
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="text-lg">Department View</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Click on each department card to view department-wise attendance details
+                Click on each department card to view department-wise attendance across all sites
               </p>
             </CardHeader>
             <CardContent className="px-4 sm:px-6">
@@ -807,28 +825,63 @@ const SuperAdminDashboard = () => {
             <CardContent className="px-4 sm:px-6">
               <div className="text-center py-6">
                 <div className="text-4xl sm:text-5xl font-bold text-red-600 mb-4">
-                  ₹{(outstandingData.totalOutstanding / 100000).toFixed(1)} Lakhs
+                  ₹{(outstandingData.totalOutstandingDue / 100000).toFixed(1)} Lakhs
                 </div>
                 <div className="text-lg text-muted-foreground">
-                  Total Outstanding Amount
+                  Total Outstanding Due
                 </div>
                 <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-white p-4 rounded-lg border border-red-100">
-                    <p className="text-sm font-medium text-red-800">Total Parties</p>
-                    <p className="text-2xl font-bold text-red-600">{outstandingData.totalParties}</p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg border border-orange-100">
-                    <p className="text-sm font-medium text-orange-800">Pending</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {outstandingData.pending}
-                    </p>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg border border-red-100">
-                    <p className="text-sm font-medium text-red-800">Overdue</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {outstandingData.overdue}
-                    </p>
-                  </div>
+                  {/* Total Invoices Card */}
+                  <Card className="bg-white border-blue-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-800">Total Invoices</p>
+                          <p className="text-2xl font-bold text-blue-600">{outstandingData.totalInvoices}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Total invoices generated</p>
+                        </div>
+                        <div className="p-3 bg-blue-100 rounded-full">
+                          <FileText className="h-6 w-6 text-blue-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Received Total Amount Card */}
+                  <Card className="bg-white border-green-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Received Total Amount</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {formatCurrency(outstandingData.receivedTotalAmount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">Amount received so far</p>
+                        </div>
+                        <div className="p-3 bg-green-100 rounded-full">
+                          <Receipt className="h-6 w-6 text-green-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total Outstanding Due Card */}
+                  <Card className="bg-white border-red-200 hover:shadow-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-800">Total Outstanding Due</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            {formatCurrency(outstandingData.totalOutstandingDue)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">Pending amount to be received</p>
+                        </div>
+                        <div className="p-3 bg-red-100 rounded-full">
+                          <AlertTriangle className="h-6 w-6 text-red-600" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </CardContent>
@@ -937,9 +990,9 @@ const SuperAdminDashboard = () => {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-purple-800">Completion Rate</p>
+                        <p className="text-sm font-medium text-purple-800">Total Difference</p>
                         <p className="text-2xl font-bold text-purple-600">
-                          {payrollSummary.completionRate}%
+                          {formatCurrency(payrollSummary.totalDifference)}
                         </p>
                       </div>
                       <AlertCircle className="h-8 w-8 text-purple-600" />
@@ -1019,40 +1072,49 @@ const SuperAdminDashboard = () => {
                             <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Billing Amount</th>
                             <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Total Paid</th>
                             <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Hold Salary</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Difference</th>
                             <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
                             <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Remark</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {paginatedPayrollData.map((item) => (
-                            <tr key={item.id} className="border-b hover:bg-muted/50">
-                              <td className="p-4 align-middle font-medium">
-                                <div>
-                                  <div className="font-medium text-sm">{item.siteName.split(',')[0]}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {item.siteName.split(',').slice(1).join(',')}
+                          {paginatedPayrollData.map((item) => {
+                            const difference = calculateDifference(item);
+                            return (
+                              <tr key={item.id} className="border-b hover:bg-muted/50">
+                                <td className="p-4 align-middle font-medium">
+                                  <div>
+                                    <div className="font-medium text-sm">{item.siteName.split(',')[0]}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {item.siteName.split(',').slice(1).join(',')}
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="p-4 align-middle font-bold">
-                                {formatCurrency(item.billingAmount)}
-                              </td>
-                              <td className="p-4 align-middle text-green-600 font-semibold">
-                                {formatCurrency(item.totalPaid)}
-                              </td>
-                              <td className="p-4 align-middle text-orange-600 font-semibold">
-                                {formatCurrency(item.holdSalary)}
-                              </td>
-                              <td className="p-4 align-middle">
-                                <Badge variant={item.status === 'Paid' ? 'default' : 'secondary'} className="text-xs">
-                                  {item.status}
-                                </Badge>
-                              </td>
-                              <td className="p-4 align-middle">
-                                <span className="text-xs text-muted-foreground">{item.remark}</span>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+                                <td className="p-4 align-middle font-bold">
+                                  {formatCurrency(item.billingAmount)}
+                                </td>
+                                <td className="p-4 align-middle text-green-600 font-semibold">
+                                  {formatCurrency(item.totalPaid)}
+                                </td>
+                                <td className="p-4 align-middle text-orange-600 font-semibold">
+                                  {formatCurrency(item.holdSalary)}
+                                </td>
+                                <td className="p-4 align-middle font-bold" style={{ 
+                                  color: difference > 0 ? '#ef4444' : difference < 0 ? '#10b981' : '#6b7280'
+                                }}>
+                                  {formatCurrency(difference)}
+                                </td>
+                                <td className="p-4 align-middle">
+                                  <Badge variant={item.status === 'Paid' ? 'default' : 'secondary'} className="text-xs">
+                                    {item.status}
+                                  </Badge>
+                                </td>
+                                <td className="p-4 align-middle">
+                                  <span className="text-xs text-muted-foreground">{item.remark}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1156,9 +1218,9 @@ const SuperAdminDashboard = () => {
                               </span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                              <span className="font-medium">Completion Rate:</span>
+                              <span className="font-medium">Difference:</span>
                               <span className="font-bold text-purple-600">
-                                {((selectedSiteData.totalPaid / selectedSiteData.billingAmount) * 100).toFixed(1)}%
+                                {formatCurrency(calculateDifference(selectedSiteData))}
                               </span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">

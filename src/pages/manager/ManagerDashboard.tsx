@@ -40,7 +40,7 @@ interface QuickAction {
   id: number;
   title: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<any>;
   action: () => void;
   color: string;
 }
@@ -56,6 +56,37 @@ interface AttendanceStatus {
   breakTime: number;
   lastCheckInDate: string | null;
 }
+
+interface StatCardProps {
+  title: string;
+  value: number | string;
+  icon: React.ComponentType<any>;
+  trend?: { value: number; isPositive: boolean };
+  delay?: number;
+  loading?: boolean;
+}
+
+// Custom StatCard component to fix the type issues
+const CustomStatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, trend, delay, loading }) => {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {loading ? "..." : value}
+        </div>
+        {trend && (
+          <p className={`text-xs ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+            {trend.isPositive ? '+' : '-'}{trend.value}% from last month
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const ManagerDashboard = () => {
   const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();
@@ -107,8 +138,14 @@ const ManagerDashboard = () => {
       const savedAttendance = localStorage.getItem('managerAttendance');
       if (savedAttendance) {
         const attendanceData = JSON.parse(savedAttendance);
-        setAttendance(attendanceData);
-        checkIfAlreadyCheckedInToday(attendanceData.lastCheckInDate);
+        // Ensure numeric values are numbers, not strings
+        const processedAttendance = {
+          ...attendanceData,
+          totalHours: typeof attendanceData.totalHours === 'string' ? parseFloat(attendanceData.totalHours) : (attendanceData.totalHours || 0),
+          breakTime: typeof attendanceData.breakTime === 'string' ? parseFloat(attendanceData.breakTime) : (attendanceData.breakTime || 0)
+        };
+        setAttendance(processedAttendance);
+        checkIfAlreadyCheckedInToday(processedAttendance.lastCheckInDate);
       }
     } catch (error) {
       console.error('Error loading attendance status:', error);
@@ -176,7 +213,7 @@ const ManagerDashboard = () => {
       isCheckedIn: false,
       isOnBreak: false,
       checkOutTime: now,
-      totalHours
+      totalHours: Number(totalHours.toFixed(2)) // Ensure it's a number
     };
     saveAttendanceStatus(newAttendance);
     
@@ -202,13 +239,13 @@ const ManagerDashboard = () => {
   const handleBreakOut = () => {
     const now = new Date().toISOString();
     const breakTime = calculateBreakTime(attendance.breakStartTime, now);
-    const totalBreakTime = attendance.breakTime + breakTime;
+    const totalBreakTime = (attendance.breakTime || 0) + breakTime;
     
     const newAttendance = {
       ...attendance,
       isOnBreak: false,
       breakEndTime: now,
-      breakTime: totalBreakTime
+      breakTime: Number(totalBreakTime.toFixed(2)) // Ensure it's a number
     };
     saveAttendanceStatus(newAttendance);
     
@@ -245,10 +282,18 @@ const ManagerDashboard = () => {
     });
   };
 
-  const addActivity = (type: string, message: string) => {
+  // Safe number formatting function
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return '0.00';
+    }
+    return value.toFixed(2);
+  };
+
+  const addActivity = (type: Activity['type'], message: string) => {
     const newActivity: Activity = {
       id: Date.now(),
-      type: type as any,
+      type: type,
       title: message,
       user: 'You',
       time: 'Just now',
@@ -402,7 +447,7 @@ const ManagerDashboard = () => {
 
   // Handle activity click with detailed functionality
   const handleActivityClick = (activity: Activity) => {
-    const actions = {
+    const actions: Record<Activity['type'], () => void> = {
       task_completed: () => {
         toast.success(`🎉 Task completed successfully!`, {
           description: `${activity.title} by ${activity.user}`,
@@ -547,7 +592,7 @@ const ManagerDashboard = () => {
   };
 
   // Get activity icon
-  const getActivityIcon = (type: string) => {
+  const getActivityIcon = (type: Activity['type']) => {
     const icons = {
       task_completed: <CheckCircle2 className="h-4 w-4 text-green-500" />,
       task_assigned: <ClipboardList className="h-4 w-4 text-blue-500" />,
@@ -557,11 +602,11 @@ const ManagerDashboard = () => {
       checkout: <LogOut className="h-4 w-4 text-blue-500" />,
       break: <Coffee className="h-4 w-4 text-purple-500" />
     };
-    return icons[type as keyof typeof icons];
+    return icons[type];
   };
 
   // Get activity badge color
-  const getActivityBadgeColor = (type: string) => {
+  const getActivityBadgeColor = (type: Activity['type']) => {
     const colors = {
       task_completed: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800",
       task_assigned: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800",
@@ -571,11 +616,11 @@ const ManagerDashboard = () => {
       checkout: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800",
       break: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800"
     };
-    return colors[type as keyof typeof colors];
+    return colors[type];
   };
 
   // Get activity type label
-  const getActivityTypeLabel = (type: string) => {
+  const getActivityTypeLabel = (type: Activity['type']) => {
     const labels = {
       task_completed: "Completed",
       task_assigned: "Assigned",
@@ -585,7 +630,7 @@ const ManagerDashboard = () => {
       checkout: "Check Out",
       break: "Break Time"
     };
-    return labels[type as keyof typeof labels];
+    return labels[type];
   };
 
   return (
@@ -713,11 +758,11 @@ const ManagerDashboard = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Total Hours:</span>
-                  <p className="font-medium">{attendance.totalHours.toFixed(2)}h</p>
+                  <p className="font-medium">{formatNumber(attendance.totalHours)}h</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Break Time:</span>
-                  <p className="font-medium">{attendance.breakTime.toFixed(2)}h</p>
+                  <p className="font-medium">{formatNumber(attendance.breakTime)}h</p>
                 </div>
               </div>
             </div>
@@ -726,7 +771,7 @@ const ManagerDashboard = () => {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard
+          <CustomStatCard
             title="Team Supervisors"
             value={stats.totalSupervisors}
             icon={Shield}
@@ -734,7 +779,7 @@ const ManagerDashboard = () => {
             delay={0}
             loading={isLoading}
           />
-          <StatCard
+          <CustomStatCard
             title="Active Projects"
             value={stats.activeProjects}
             icon={ClipboardList}
@@ -742,7 +787,7 @@ const ManagerDashboard = () => {
             delay={0.1}
             loading={isLoading}
           />
-          <StatCard
+          <CustomStatCard
             title="Pending Tasks"
             value={stats.pendingTasks}
             icon={Clock}
@@ -750,7 +795,7 @@ const ManagerDashboard = () => {
             delay={0.2}
             loading={isLoading}
           />
-          <StatCard
+          <CustomStatCard
             title="Productivity Score"
             value={`${stats.productivityScore}%`}
             icon={TrendingUp}
