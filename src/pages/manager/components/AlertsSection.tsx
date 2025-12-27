@@ -1,19 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { initialAlerts, Alert } from "../data";
+import { Alert } from "../data";
 
 const AlertsSection = () => {
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleUpdateStatus = (alertId: string, status: Alert["status"]) => {
-    setAlerts(prev => prev.map(alert => 
-      alert.id === alertId ? { ...alert, status } : alert
-    ));
-    toast.success("Alert status updated!");
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
+
+  const fetchAlerts = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/alerts');
+      const data = await response.json();
+      if (data.alerts && data.alerts.length > 0) {
+        setAlerts(data.alerts);
+      } else {
+        setAlerts([]);
+      }
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
+      toast.error('Failed to load alerts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (alertId: string, status: Alert["status"]) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/alerts/${alertId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (response.ok) {
+        setAlerts(prev => prev.map(alert =>
+          alert.id === alertId ? { ...alert, status } : alert
+        ));
+        toast.success("Alert status updated!");
+      } else {
+        toast.error('Failed to update alert status');
+      }
+    } catch (error) {
+      console.error('Error updating alert:', error);
+      toast.error('Failed to update alert status');
+    }
   };
 
   const getSeverityColor = (severity: Alert["severity"]) => {
@@ -25,6 +64,21 @@ const AlertsSection = () => {
     };
     return colors[severity];
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Alerts & Issues</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Loading alerts...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -47,7 +101,14 @@ const AlertsSection = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {alerts.map((alert) => (
+              {alerts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No data found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                alerts.map((alert) => (
                 <TableRow key={alert.id}>
                   <TableCell className="font-medium">{alert.title}</TableCell>
                   <TableCell>
@@ -93,7 +154,8 @@ const AlertsSection = () => {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

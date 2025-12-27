@@ -5,35 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRole, UserRole } from "@/context/RoleContext";
+import { useRole } from "@/context/RoleContext";
 import { toast } from "sonner";
 import { Lock, Mail, Shield } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedRole, setSelectedRole] = useState<UserRole>("superadmin");
-  const [loading, setLoading] = useState(false);
   const { login } = useRole();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password || !selectedRole) {
+
+    if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    setLoading(true);
-
     try {
-      await login(email, password, selectedRole);
+      const user = await login(email, password);
       toast.success("Login successful!");
-      
-      // Navigate based on role
-      switch (selectedRole) {
+
+      // Navigate based on user's role
+      switch (user.role) {
         case "superadmin":
           navigate("/superadmin/dashboard");
           break;
@@ -54,8 +49,6 @@ const Login = () => {
       }
     } catch (error: any) {
       toast.error(error.message || "Login failed. Please try again.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -76,28 +69,8 @@ const Login = () => {
             <CardDescription>Sign in to your account</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="role">Select Role</Label>
-                <Select 
-                  value={selectedRole || ""} 
-                  onValueChange={(value) => setSelectedRole(value as UserRole)}
-                  disabled={loading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
-                    <SelectItem value="superadmin">Super Admin</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="supervisor">Supervisor</SelectItem>
-                    <SelectItem value="employee">Employee</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
+           <form onSubmit={handleSubmit} className="space-y-4">
+             <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -109,7 +82,6 @@ const Login = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     required
-                    disabled={loading}
                   />
                 </div>
               </div>
@@ -126,13 +98,12 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
                     required
-                    disabled={loading}
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing In..." : "Sign In"}
+              <Button type="submit" className="w-full">
+                Sign In
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">

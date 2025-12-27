@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,37 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon, Plus, Calendar, Download, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, startOfWeek as weekStart, endOfWeek as weekEnd, addDays, differenceInDays } from "date-fns";
 import { toast } from "sonner";
-import { initialRoster, initialSites, staffMembers, supervisors, rosterTypes, RosterEntry } from "../data";
+import { initialSites, staffMembers, supervisors, rosterTypes, RosterEntry } from "../data";
 import { FormField } from "./shared";
 import { cn } from "@/lib/utils";
 
 const RosterSection = () => {
   const [selectedRoster, setSelectedRoster] = useState<"daily" | "weekly" | "fortnightly" | "monthly">("daily");
-  const [roster, setRoster] = useState<RosterEntry[]>(initialRoster);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [addEntryDialogOpen, setAddEntryDialogOpen] = useState(false);
-  
+
+  useEffect(() => {
+    fetchRoster();
+  }, []);
+
+  const fetchRoster = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/roster');
+      const data = await response.json();
+      if (data.roster && data.roster.length > 0) {
+        setRoster(data.roster);
+      } else {
+        setRoster([]);
+      }
+    } catch (error) {
+      console.error('Error fetching roster:', error);
+      toast.error('Failed to load roster');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Date states for different roster types
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -87,18 +109,16 @@ const RosterSection = () => {
     }
   };
 
-  const handleAddRosterEntry = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddRosterEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
-    const selectedStaff = staffMembers.find(s => s.id === formData.get("employee"));
-    
-    const newRoster: RosterEntry = {
-      id: Date.now().toString(),
+
+    const selectedStaff = staffMembers.find(s => s.id === formData.get("employee") as string);
+
+    const newRoster = {
       date: formData.get("date") as string,
       employeeName: selectedStaff?.name || "",
       employeeId: selectedStaff?.employeeId || "",
-      department: selectedStaff?.department || "",
       designation: selectedStaff?.role || "",
       shift: formData.get("shift") as string,
       shiftTiming: formData.get("shiftTiming") as string,
@@ -107,18 +127,50 @@ const RosterSection = () => {
       remark: formData.get("remark") as string,
       type: selectedRoster as "daily" | "weekly" | "fortnightly" | "monthly",
       siteClient: formData.get("siteClient") as string,
-      supervisor: formData.get("supervisor") as string
+      supervisor: formData.get("supervisor") as string,
+      attendance: "present" as "present" | "absent" | "half-day"
     };
 
-    setRoster(prev => [newRoster, ...prev]);
-    toast.success("Roster entry added successfully!");
-    setAddEntryDialogOpen(false);
-    (e.target as HTMLFormElement).reset();
+    try {
+      const response = await fetch('http://localhost:5000/api/roster', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newRoster),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRoster(prev => [{ id: data.id, ...newRoster }, ...prev]);
+        toast.success("Roster entry added successfully!");
+        setAddEntryDialogOpen(false);
+        (e.target as HTMLFormElement).reset();
+      } else {
+        toast.error('Failed to add roster entry');
+      }
+    } catch (error) {
+      console.error('Error adding roster entry:', error);
+      toast.error('Failed to add roster entry');
+    }
   };
 
-  const handleDeleteRoster = (rosterId: string) => {
-    setRoster(prev => prev.filter(entry => entry.id !== rosterId));
-    toast.success("Roster entry deleted!");
+  const handleDeleteRoster = async (rosterId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/roster/${rosterId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setRoster(prev => prev.filter(entry => entry.id !== rosterId));
+        toast.success("Roster entry deleted!");
+      } else {
+        toast.error('Failed to delete roster entry');
+      }
+    } catch (error) {
+      console.error('Error deleting roster entry:', error);
+      toast.error('Failed to delete roster entry');
+    }
   };
 
   // Filter roster by date range
@@ -310,6 +362,21 @@ const RosterSection = () => {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Roster Management</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Loading roster...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

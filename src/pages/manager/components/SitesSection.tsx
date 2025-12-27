@@ -6,15 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Plus, 
-  Eye, 
-  Trash2, 
-  Edit, 
-  Building, 
-  User, 
-  Phone, 
-  MapPin, 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Plus,
+  Eye,
+  Trash2,
+  Edit,
+  Building,
+  User,
+  Phone,
+  MapPin,
   Users,
   Shield,
   FileText,
@@ -23,13 +24,13 @@ import {
 import { toast } from "sonner";
 import { initialSites, Site } from "../data";
 import { FormField } from "./shared";
+import { useRole } from "@/context/RoleContext";
+import { db } from "@/firebase";
+import { ref, get, onValue } from "firebase/database";
 
-// Mock current logged-in manager
-const currentManager = {
-  id: "manager-a",
-  name: "Manager A",
-  role: "manager",
-  assignedSiteIds: ["1", "2", "3"] // Sites assigned to this manager
+// Helper function to sanitize email for database path
+const sanitizeEmail = (email: string) => {
+  return email.replace(/[@.]/g, '_');
 };
 
 const ServicesList = [
@@ -53,6 +54,7 @@ const StaffRoles = [
 ];
 
 const SitesSection = () => {
+  const { user } = useRole();
   const [sites, setSites] = useState<Site[]>(initialSites);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -61,10 +63,88 @@ const SitesSection = () => {
     Array<{ role: string; count: number }>
   >([]);
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [supervisors, setSupervisors] = useState<any[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+
+  // Fetch clients from Firebase (same as CRM page)
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const userPath = user.email.replace(/[@.]/g, '_');
+    setLoadingClients(true);
+
+    const clientsRef = ref(db, `users/${userPath}/clients`);
+    const unsubscribe = onValue(clientsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const clientsData = snapshot.val();
+        const clientsArray = Object.keys(clientsData).map(key => ({
+          id: key,
+          ...clientsData[key]
+        }));
+        setClients(clientsArray);
+      } else {
+        setClients([]);
+      }
+      setLoadingClients(false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.email]);
+
+  // Fetch supervisors from Firebase (same as clients)
+  useEffect(() => {
+    if (!user?.email) {
+      setSupervisors([]);
+      setLoadingSupervisors(false);
+      return;
+    }
+
+    const userPath = user.email.replace(/[@.]/g, '_');
+    setLoadingSupervisors(true);
+
+    try {
+      const supervisorsRef = ref(db, `users/${userPath}/supervisors`);
+      const unsubscribe = onValue(supervisorsRef, (snapshot) => {
+        try {
+          if (snapshot.exists()) {
+            const supervisorsData = snapshot.val();
+            const supervisorsArray = Object.keys(supervisorsData).map(key => ({
+              id: key,
+              ...supervisorsData[key]
+            }));
+            setSupervisors(supervisorsArray);
+          } else {
+            setSupervisors([]);
+          }
+        } catch (error) {
+          console.error('Error processing supervisors data:', error);
+          setSupervisors([]);
+        } finally {
+          setLoadingSupervisors(false);
+        }
+      });
+
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Error setting up supervisors listener:', error);
+      setSupervisors([]);
+      setLoadingSupervisors(false);
+    }
+  }, [user?.email]);
+
+  // Use actual user as current manager
+  const currentManager = user ? {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    assignedSiteIds: ["1", "2", "3"] // This should come from database, but for now mock
+  } : null;
 
   // Filter sites to show only those assigned to current manager
-  const assignedSites = sites.filter(site => 
-    currentManager.assignedSiteIds.includes(site.id)
+  const assignedSites = sites.filter(site =>
+    currentManager?.assignedSiteIds.includes(site.id)
   );
 
   const toggleService = (service: string) => {
@@ -105,18 +185,18 @@ const SitesSection = () => {
     setEditingSiteId(site.id);
     setSelectedServices(site.services || []);
     setStaffDeployment(site.staffDeployment || []);
-    
+
     // Set form values for editing
     setTimeout(() => {
       const form = document.getElementById('site-form') as HTMLFormElement;
       if (form) {
         (form.elements.namedItem('site-name') as HTMLInputElement).value = site.name;
-        (form.elements.namedItem('client-name') as HTMLInputElement).value = site.clientName;
+        (form.elements.namedItem('client-name') as HTMLSelectElement).value = site.clientName;
         (form.elements.namedItem('location') as HTMLInputElement).value = site.location;
         (form.elements.namedItem('area-sqft') as HTMLInputElement).value = site.areaSqft.toString();
         (form.elements.namedItem('site-manager') as HTMLInputElement).value = site.siteManager;
         (form.elements.namedItem('manager-phone') as HTMLInputElement).value = site.managerPhone;
-        (form.elements.namedItem('supervisor') as HTMLInputElement).value = site.supervisor;
+        (form.elements.namedItem('supervisor') as HTMLSelectElement).value = site.supervisor;
         (form.elements.namedItem('supervisor-phone') as HTMLInputElement).value = site.supervisorPhone;
         (form.elements.namedItem('contract-value') as HTMLInputElement).value = site.contractValue.toString();
         (form.elements.namedItem('contract-end-date') as HTMLInputElement).value = site.contractEndDate;
@@ -126,7 +206,7 @@ const SitesSection = () => {
     setDialogOpen(true);
   };
 
-  const handleAddOrUpdateSite = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddOrUpdateSite = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
@@ -146,39 +226,63 @@ const SitesSection = () => {
       status: "active" as const
     };
 
-    if (editMode && editingSiteId) {
-      // Check if site is assigned to current manager
-      if (!currentManager.assignedSiteIds.includes(editingSiteId)) {
-        toast.error("You can only update sites assigned to you");
-        return;
+    try {
+      if (editMode && editingSiteId) {
+        // Update existing site
+        const response = await fetch(`http://localhost:5000/api/sites/${editingSiteId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(siteData),
+        });
+
+        if (response.ok) {
+          setSites(prev =>
+            prev.map(site =>
+              site.id === editingSiteId
+                ? { ...site, ...siteData }
+                : site
+            )
+          );
+          toast.success("Site updated successfully!");
+        } else {
+          toast.error("Failed to update site");
+        }
+      } else {
+        // Add new site
+        const response = await fetch('http://localhost:5000/api/sites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(siteData),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const newSite: Site = {
+            ...siteData,
+            id: result.id
+          };
+          setSites(prev => [newSite, ...prev]);
+
+          // Add to manager's assigned sites
+          currentManager.assignedSiteIds.push(newSite.id);
+
+          toast.success("Site added successfully!");
+        } else {
+          toast.error("Failed to add site");
+        }
       }
 
-      // Update existing site
-      setSites(prev =>
-        prev.map(site =>
-          site.id === editingSiteId
-            ? { ...site, ...siteData }
-            : site
-        )
-      );
-      toast.success("Site updated successfully!");
-    } else {
-      // Add new site (auto-assign to current manager)
-      const newSite: Site = {
-        ...siteData,
-        id: Date.now().toString()
-      };
-      setSites(prev => [newSite, ...prev]);
-      
-      // Add to manager's assigned sites
-      currentManager.assignedSiteIds.push(newSite.id);
-      
-      toast.success("Site added successfully!");
+      setDialogOpen(false);
+      resetForm();
+      (e.target as HTMLFormElement).reset();
+    } catch (error) {
+      console.error('Error saving site:', error);
+      toast.error("An error occurred while saving the site");
     }
-
-    setDialogOpen(false);
-    resetForm();
-    (e.target as HTMLFormElement).reset();
   };
 
   const handleDeleteSite = (siteId: string) => {
@@ -255,6 +359,10 @@ const SitesSection = () => {
     total + site.areaSqft, 0
   );
 
+  if (!currentManager) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div className="space-y-6">
       {/* Manager Header */}
@@ -294,7 +402,24 @@ const SitesSection = () => {
                       <Input id="site-name" name="site-name" placeholder="Enter site name" required />
                     </FormField>
                     <FormField label="Client Name" id="client-name" required>
-                      <Input id="client-name" name="client-name" placeholder="Enter client name" required />
+                      <Select name="client-name" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {loadingClients ? (
+                            <SelectItem value="" disabled>Loading clients...</SelectItem>
+                          ) : clients.length > 0 ? (
+                            clients.map((client) => (
+                              <SelectItem key={client.id} value={client.name}>
+                                {client.name} - {client.company}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>No clients available</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </FormField>
                     <FormField label="Location" id="location" required>
                       <Input id="location" name="location" placeholder="Enter location" required />
@@ -325,20 +450,24 @@ const SitesSection = () => {
                       />
                     </FormField>
                     <FormField label="Supervisor" id="supervisor" required>
-                      <Input 
-                        id="supervisor" 
-                        name="supervisor" 
-                        placeholder="Enter supervisor name" 
-                        required 
-                      />
-                    </FormField>
-                    <FormField label="Supervisor Phone" id="supervisor-phone" required>
-                      <Input 
-                        id="supervisor-phone" 
-                        name="supervisor-phone" 
-                        placeholder="Enter supervisor phone" 
-                        required 
-                      />
+                      <Select name="supervisor" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select supervisor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {loadingSupervisors ? (
+                            <SelectItem value="" disabled>Loading supervisors...</SelectItem>
+                          ) : supervisors.length > 0 ? (
+                            supervisors.map((supervisor) => (
+                              <SelectItem key={supervisor.id} value={supervisor.name}>
+                                {supervisor.name} - {supervisor.site || supervisor.department}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>No supervisors available</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </FormField>
                     <FormField label="Contract Value (₹)" id="contract-value" required>
                       <Input 
@@ -432,7 +561,7 @@ const SitesSection = () => {
                     <div className="text-sm space-y-1">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Manager:</span>
-                        <span className="font-medium">{currentManager.name}</span>
+                        <span className="font-medium">{currentManager?.name}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Current Assigned Sites:</span>

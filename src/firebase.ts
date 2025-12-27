@@ -1,7 +1,7 @@
-// lib/firebase.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBzOm4BCWApqHAzURx6O2jqkyO380APpMw",
@@ -14,7 +14,8 @@ const firebaseConfig = {
   measurementId: "G-C9E8LC0YVC"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+export const db = getDatabase(app); // Realtime Database for auth
+export const db_firestore = getFirestore(app); // Firestore for other services
 export const auth = getAuth(app);
-export const database = getDatabase(app);

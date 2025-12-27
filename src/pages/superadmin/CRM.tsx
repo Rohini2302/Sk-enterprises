@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/shared/DashboardHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Plus, Edit, Trash2, Phone, Mail, Calendar, Eye, MapPin, Building } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { db } from "@/firebase";
+import { ref, set, get, push, remove, update, onValue } from "firebase/database";
+import { useRole } from "@/context/RoleContext";
 
 interface Client {
   id: string;
@@ -70,135 +73,96 @@ const industries = ["IT Services", "Manufacturing", "Banking", "Healthcare", "Ed
 const generateIndianPhone = () => `9${Math.floor(100000000 + Math.random() * 900000000)}`;
 
 const CRM = () => {
+  const { user } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [commDialogOpen, setCommDialogOpen] = useState(false);
+  const [editClientDialog, setEditClientDialog] = useState<string | null>(null);
+  const [editLeadDialog, setEditLeadDialog] = useState<string | null>(null);
   const [viewClientDialog, setViewClientDialog] = useState<string | null>(null);
   const [viewLeadDialog, setViewLeadDialog] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [clients, setClients] = useState<Client[]>([
-    { 
-      id: "1", 
-      name: "Rajesh Kumar", 
-      company: "Reliance Industries", 
-      email: "rajesh.kumar@reliance.com", 
-      phone: "9876543210", 
-      address: "Nariman Point", 
-      city: "Mumbai",
-      status: "active", 
-      value: "₹50,00,000", 
-      industry: "Manufacturing",
-      contactPerson: "Rajesh Kumar"
-    },
-    { 
-      id: "2", 
-      name: "Priya Sharma", 
-      company: "Infosys Ltd", 
-      email: "priya.sharma@infosys.com", 
-      phone: "9876543211", 
-      address: "Electronic City", 
-      city: "Bangalore",
-      status: "active", 
-      value: "₹75,00,000", 
-      industry: "IT Services",
-      contactPerson: "Priya Sharma"
-    },
-    { 
-      id: "3", 
-      name: "Amit Patel", 
-      company: "HDFC Bank", 
-      email: "amit.patel@hdfc.com", 
-      phone: "9876543212", 
-      address: "MG Road", 
-      city: "Delhi",
-      status: "inactive", 
-      value: "₹25,00,000", 
-      industry: "Banking",
-      contactPerson: "Amit Patel"
-    }
-  ]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [communications, setCommunications] = useState<Communication[]>([]);
 
-  const [leads, setLeads] = useState<Lead[]>([
-    { 
-      id: "1", 
-      name: "Sanjay Singh", 
-      company: "Tech Solutions", 
-      email: "sanjay@techsolutions.com", 
-      phone: "9876543213", 
-      source: "Website", 
-      status: "new", 
-      value: "₹30,00,000", 
-      assignedTo: "Sales Manager A",
-      followUpDate: "2024-01-20",
-      notes: "Interested in enterprise solution"
-    },
-    { 
-      id: "2", 
-      name: "Neha Reddy", 
-      company: "Digital Innovations", 
-      email: "neha@digital.com", 
-      phone: "9876543214", 
-      source: "Referral", 
-      status: "contacted", 
-      value: "₹45,00,000", 
-      assignedTo: "Sales Manager B",
-      followUpDate: "2024-01-18",
-      notes: "Requested product demo"
-    },
-    { 
-      id: "3", 
-      name: "Vikram Mehta", 
-      company: "Startup India", 
-      email: "vikram@startupindia.com", 
-      phone: "9876543215", 
-      source: "Social Media", 
-      status: "qualified", 
-      value: "₹20,00,000", 
-      assignedTo: "Sales Manager A",
-      followUpDate: "2024-01-22",
-      notes: "Budget approved, waiting for proposal"
-    }
-  ]);
+  // Helper function to sanitize email for Firebase path
+  const sanitizeEmail = (email: string) => email.replace(/[@.]/g, '_');
 
-  const [communications, setCommunications] = useState<Communication[]>([
-    { 
-      id: "1", 
-      clientName: "Rajesh Kumar", 
-      clientId: "1",
-      type: "call", 
-      date: "2024-01-15", 
-      notes: "Discussed project requirements and timeline. Client showed interest in premium package.",
-      followUpRequired: true,
-      followUpDate: "2024-01-20"
-    },
-    { 
-      id: "2", 
-      clientName: "Priya Sharma", 
-      clientId: "2",
-      type: "meeting", 
-      date: "2024-01-14", 
-      notes: "Product demonstration completed. Client requested customized features.",
-      followUpRequired: true,
-      followUpDate: "2024-01-18"
-    },
-    { 
-      id: "3", 
-      clientName: "Sanjay Singh", 
-      clientId: "1",
-      type: "email", 
-      date: "2024-01-13", 
-      notes: "Sent proposal document with pricing and implementation plan.",
-      followUpRequired: false
-    }
-  ]);
+  // Load data from Firebase
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const userPath = sanitizeEmail(user.email);
+    setLoading(true);
+
+    // Load clients
+    const clientsRef = ref(db, `users/${userPath}/clients`);
+    const clientsUnsubscribe = onValue(clientsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const clientsData = snapshot.val();
+        const clientsArray = Object.keys(clientsData).map(key => ({
+          id: key,
+          ...clientsData[key]
+        }));
+        setClients(clientsArray);
+      } else {
+        setClients([]);
+      }
+    });
+
+    // Load leads
+    const leadsRef = ref(db, `users/${userPath}/leads`);
+    const leadsUnsubscribe = onValue(leadsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const leadsData = snapshot.val();
+        const leadsArray = Object.keys(leadsData).map(key => ({
+          id: key,
+          ...leadsData[key]
+        }));
+        setLeads(leadsArray);
+      } else {
+        setLeads([]);
+      }
+    });
+
+    // Load communications
+    const commsRef = ref(db, `users/${userPath}/communications`);
+    const commsUnsubscribe = onValue(commsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const commsData = snapshot.val();
+        const commsArray = Object.keys(commsData).map(key => ({
+          id: key,
+          ...commsData[key]
+        }));
+        setCommunications(commsArray);
+      } else {
+        setCommunications([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      clientsUnsubscribe();
+      leadsUnsubscribe();
+      commsUnsubscribe();
+    };
+  }, [user?.email]);
 
   // Client Functions
-  const handleAddClient = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddClient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user?.email) return;
+
     const formData = new FormData(e.currentTarget);
+    const userPath = sanitizeEmail(user.email);
+    const clientsRef = ref(db, `users/${userPath}/clients`);
+    const newClientRef = push(clientsRef);
+
     const newClient: Client = {
-      id: Date.now().toString(),
+      id: newClientRef.key!,
       name: formData.get("name") as string,
       company: formData.get("company") as string,
       email: formData.get("email") as string,
@@ -210,43 +174,80 @@ const CRM = () => {
       industry: formData.get("industry") as string,
       contactPerson: formData.get("contactPerson") as string,
     };
-    setClients(prev => [newClient, ...prev]);
-    toast.success("Client added successfully!");
-    setClientDialogOpen(false);
+
+    try {
+      await set(newClientRef, newClient);
+      toast.success("Client added successfully!");
+      setClientDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast.error("Failed to add client");
+    }
   };
 
-  const handleEditClient = (clientId: string, e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditClient = async (clientId: string, e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user?.email) return;
+
     const formData = new FormData(e.currentTarget);
-    setClients(prev => prev.map(client => 
-      client.id === clientId ? {
-        ...client,
-        name: formData.get("name") as string,
-        company: formData.get("company") as string,
-        email: formData.get("email") as string,
-        phone: formData.get("phone") as string,
-        address: formData.get("address") as string,
-        city: formData.get("city") as string,
-        value: formData.get("value") as string,
-        industry: formData.get("industry") as string,
-        contactPerson: formData.get("contactPerson") as string,
-      } : client
-    ));
-    toast.success("Client updated successfully!");
+    const userPath = sanitizeEmail(user.email);
+    const clientRef = ref(db, `users/${userPath}/clients/${clientId}`);
+
+    const updatedClient = {
+      name: formData.get("name") as string,
+      company: formData.get("company") as string,
+      email: formData.get("email") as string,
+      phone: formData.get("phone") as string,
+      address: formData.get("address") as string,
+      city: formData.get("city") as string,
+      value: formData.get("value") as string,
+      industry: formData.get("industry") as string,
+      contactPerson: formData.get("contactPerson") as string,
+    };
+
+    try {
+      await update(clientRef, updatedClient);
+      toast.success("Client updated successfully!");
+      setEditClientDialog(null);
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast.error("Failed to update client");
+    }
   };
 
-  const handleDeleteClient = (clientId: string) => {
-    setClients(prev => prev.filter(c => c.id !== clientId));
-    setCommunications(prev => prev.filter(comm => comm.clientId !== clientId));
-    toast.success("Client deleted successfully!");
+  const handleDeleteClient = async (clientId: string) => {
+    if (!user?.email) return;
+
+    const userPath = sanitizeEmail(user.email);
+    const clientRef = ref(db, `users/${userPath}/clients/${clientId}`);
+
+    try {
+      await remove(clientRef);
+      // Also delete related communications
+      const commsToDelete = communications.filter(comm => comm.clientId === clientId);
+      for (const comm of commsToDelete) {
+        const commRef = ref(db, `users/${userPath}/communications/${comm.id}`);
+        await remove(commRef);
+      }
+      toast.success("Client deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      toast.error("Failed to delete client");
+    }
   };
 
   // Lead Functions
-  const handleAddLead = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddLead = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user?.email) return;
+
     const formData = new FormData(e.currentTarget);
+    const userPath = sanitizeEmail(user.email);
+    const leadsRef = ref(db, `users/${userPath}/leads`);
+    const newLeadRef = push(leadsRef);
+
     const newLead: Lead = {
-      id: Date.now().toString(),
+      id: newLeadRef.key!,
       name: formData.get("name") as string,
       company: formData.get("company") as string,
       email: formData.get("email") as string,
@@ -258,65 +259,129 @@ const CRM = () => {
       followUpDate: formData.get("followUpDate") as string,
       notes: formData.get("notes") as string,
     };
-    setLeads(prev => [newLead, ...prev]);
-    toast.success("Lead added successfully!");
-    setLeadDialogOpen(false);
+
+    try {
+      await set(newLeadRef, newLead);
+      toast.success("Lead added successfully!");
+      setLeadDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding lead:", error);
+      toast.error("Failed to add lead");
+    }
   };
 
-  const handleEditLead = (leadId: string, e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditLead = async (leadId: string, e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user?.email) return;
+
     const formData = new FormData(e.currentTarget);
-    setLeads(prev => prev.map(lead => 
-      lead.id === leadId ? {
-        ...lead,
-        name: formData.get("name") as string,
-        company: formData.get("company") as string,
-        email: formData.get("email") as string,
-        phone: formData.get("phone") as string,
-        source: formData.get("source") as string,
-        value: formData.get("value") as string,
-        assignedTo: formData.get("assignedTo") as string,
-        followUpDate: formData.get("followUpDate") as string,
-        notes: formData.get("notes") as string,
-      } : lead
-    ));
-    toast.success("Lead updated successfully!");
+    const userPath = sanitizeEmail(user.email);
+    const leadRef = ref(db, `users/${userPath}/leads/${leadId}`);
+
+    const updatedLead = {
+      name: formData.get("name") as string,
+      company: formData.get("company") as string,
+      email: formData.get("email") as string,
+      phone: formData.get("phone") as string,
+      source: formData.get("source") as string,
+      value: formData.get("value") as string,
+      assignedTo: formData.get("assignedTo") as string,
+      followUpDate: formData.get("followUpDate") as string,
+      notes: formData.get("notes") as string,
+    };
+
+    try {
+      await update(leadRef, updatedLead);
+      toast.success("Lead updated successfully!");
+      setEditLeadDialog(null);
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      toast.error("Failed to update lead");
+    }
   };
 
-  const handleDeleteLead = (leadId: string) => {
-    setLeads(prev => prev.filter(l => l.id !== leadId));
-    toast.success("Lead deleted successfully!");
+  const handleDeleteLead = async (leadId: string) => {
+    if (!user?.email) return;
+
+    const userPath = sanitizeEmail(user.email);
+    const leadRef = ref(db, `users/${userPath}/leads/${leadId}`);
+
+    try {
+      await remove(leadRef);
+      toast.success("Lead deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting lead:", error);
+      toast.error("Failed to delete lead");
+    }
   };
 
-  const handleLeadStatusChange = (leadId: string, newStatus: Lead['status']) => {
-    setLeads(prev => prev.map(lead => 
-      lead.id === leadId ? { ...lead, status: newStatus } : lead
-    ));
-    toast.success("Lead status updated!");
+  const handleLeadStatusChange = async (leadId: string, newStatus: Lead['status']) => {
+    if (!user?.email) return;
+
+    const userPath = sanitizeEmail(user.email);
+    const leadRef = ref(db, `users/${userPath}/leads/${leadId}`);
+
+    try {
+      await update(leadRef, { status: newStatus });
+      toast.success("Lead status updated!");
+    } catch (error) {
+      console.error("Error updating lead status:", error);
+      toast.error("Failed to update lead status");
+    }
   };
 
   // Communication Functions
-  const handleAddCommunication = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddCommunication = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!user?.email) return;
+
     const formData = new FormData(e.currentTarget);
+    const clientId = formData.get("clientId") as string;
+    const selectedClient = clients.find(c => c.id === clientId);
+
+    if (!selectedClient) {
+      toast.error("Please select a valid client");
+      return;
+    }
+
+    const userPath = sanitizeEmail(user.email);
+    const commsRef = ref(db, `users/${userPath}/communications`);
+    const newCommRef = push(commsRef);
+
     const newComm: Communication = {
-      id: Date.now().toString(),
-      clientName: formData.get("clientName") as string,
-      clientId: formData.get("clientId") as string,
+      id: newCommRef.key!,
+      clientName: selectedClient.name,
+      clientId: clientId,
       type: formData.get("type") as "call" | "email" | "meeting" | "demo",
       date: formData.get("date") as string,
       notes: formData.get("notes") as string,
       followUpRequired: formData.get("followUpRequired") === "on",
       followUpDate: formData.get("followUpDate") as string || undefined,
     };
-    setCommunications(prev => [newComm, ...prev]);
-    toast.success("Communication logged successfully!");
-    setCommDialogOpen(false);
+
+    try {
+      await set(newCommRef, newComm);
+      toast.success("Communication logged successfully!");
+      setCommDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding communication:", error);
+      toast.error("Failed to log communication");
+    }
   };
 
-  const handleDeleteCommunication = (commId: string) => {
-    setCommunications(prev => prev.filter(c => c.id !== commId));
-    toast.success("Communication deleted!");
+  const handleDeleteCommunication = async (commId: string) => {
+    if (!user?.email) return;
+
+    const userPath = sanitizeEmail(user.email);
+    const commRef = ref(db, `users/${userPath}/communications/${commId}`);
+
+    try {
+      await remove(commRef);
+      toast.success("Communication deleted!");
+    } catch (error) {
+      console.error("Error deleting communication:", error);
+      toast.error("Failed to delete communication");
+    }
   };
 
   // Utility Functions
@@ -368,11 +433,25 @@ const CRM = () => {
   const getClientById = (id: string) => clients.find(client => client.id === id);
   const getLeadById = (id: string) => leads.find(lead => lead.id === id);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader title="CRM Management" />
+        <div className="p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading CRM data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader title="CRM Management" />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="p-6 space-y-6"
@@ -594,7 +673,7 @@ const CRM = () => {
                                 })()}
                               </DialogContent>
                             </Dialog>
-                            <Dialog>
+                            <Dialog open={editClientDialog === client.id} onOpenChange={(open) => setEditClientDialog(open ? client.id : null)}>
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                   <Edit className="h-4 w-4" />
@@ -869,7 +948,7 @@ const CRM = () => {
                                 })()}
                               </DialogContent>
                             </Dialog>
-                            <Dialog>
+                            <Dialog open={editLeadDialog === lead.id} onOpenChange={(open) => setEditLeadDialog(open ? lead.id : null)}>
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                   <Edit className="h-4 w-4" />
@@ -980,15 +1059,20 @@ const CRM = () => {
                         <DialogTitle>Log Communication</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleAddCommunication} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="commClientName">Client Name *</Label>
-                            <Input id="commClientName" name="clientName" required />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="commClientId">Client ID</Label>
-                            <Input id="commClientId" name="clientId" />
-                          </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="commClient">Client *</Label>
+                          <Select name="clientId" required>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a client" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clients.map(client => (
+                                <SelectItem key={client.id} value={client.id}>
+                                  {client.name} - {client.company}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">

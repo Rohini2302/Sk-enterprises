@@ -7,8 +7,67 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Plus, Upload, Trash2, Camera, X, Save, Edit, Download } from "lucide-react";
 import { toast } from "sonner";
-import { Employee, SalaryStructure, NewEmployeeForm, EPFForm11Data } from "./types";
+import { Employee, SalaryStructure, NewEmployeeForm } from "./types";
 import FormField from "./FormField";
+import { addEmployee } from "@/services/employeeService";
+import { addSalaryStructure } from "@/services/salaryStructureService";
+import { useRole } from "@/context/RoleContext";
+
+// Draft functions using localStorage for now
+const saveDraft = async (userId: string, draftData: any) => {
+  try {
+    localStorage.setItem(`onboarding_draft_${userId}`, JSON.stringify(draftData));
+    return { success: true };
+  } catch (error) {
+    throw new Error('Failed to save draft');
+  }
+};
+
+const getDraft = async (userId: string) => {
+  try {
+    const draft = localStorage.getItem(`onboarding_draft_${userId}`);
+    return draft ? JSON.parse(draft) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+interface EPFForm11Data {
+  memberName: string;
+  fatherOrSpouseName: string;
+  relationshipType: 'father' | 'spouse';
+  dateOfBirth: string;
+  gender: string;
+  maritalStatus: string;
+  email: string;
+  mobileNumber: string;
+  previousEPFMember: boolean;
+  previousPensionMember: boolean;
+  previousUAN: string;
+  previousPFAccountNumber: string;
+  dateOfExit: string;
+  schemeCertificateNumber: string;
+  pensionPaymentOrder: string;
+  internationalWorker: boolean;
+  countryOfOrigin: string;
+  passportNumber: string;
+  passportValidityFrom: string;
+  passportValidityTo: string;
+  bankAccountNumber: string;
+  ifscCode: string;
+  aadharNumber: string;
+  panNumber: string;
+  firstEPFMember: boolean;
+  enrolledDate: string;
+  firstEmploymentWages: string;
+  epfMemberBeforeSep2014: boolean;
+  epfAmountWithdrawn: boolean;
+  epsAmountWithdrawn: boolean;
+  epsAmountWithdrawnAfterSep2014: boolean;
+  declarationDate: string;
+  declarationPlace: string;
+  employerDeclarationDate: string;
+}
 
 interface OnboardingTabProps {
   employees: Employee[];
@@ -30,16 +89,20 @@ const departments = [
   "Consumables Management"
 ];
 
-const OnboardingTab = ({ 
-  employees, 
-  setEmployees, 
-  salaryStructures, 
+const OnboardingTab = ({
+  employees,
+  setEmployees,
+  salaryStructures,
   setSalaryStructures,
   newJoinees = [], // Default to empty array if undefined
   setNewJoinees, // Optional prop
   leftEmployees,
   setLeftEmployees
 }: OnboardingTabProps) => {
+  const { user } = useRole();
+  const userId = user?.id || "superadmin"; // Fallback for now
+  const [isLoadingDraft, setIsLoadingDraft] = useState(true);
+
   const [newEmployee, setNewEmployee] = useState<NewEmployeeForm>({
     name: "",
     email: "",
@@ -270,6 +333,24 @@ const OnboardingTab = ({
     }
   };
 
+  // Load draft on mount
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const draftResponse = await getDraft(userId);
+        if (draftResponse && draftResponse.draft) {
+          setNewEmployee(draftResponse.draft);
+          toast.success("Draft loaded successfully");
+        }
+      } catch (error) {
+        console.error("Error loading draft:", error);
+      } finally {
+        setIsLoadingDraft(false);
+      }
+    };
+    loadDraft();
+  }, [userId]);
+
   // Cleanup camera on unmount
   useEffect(() => {
     return () => {
@@ -339,102 +420,129 @@ const OnboardingTab = ({
     }
   };
 
-  const handleAddEmployee = () => {
+  const handleSaveDraft = async () => {
+    try {
+      // Create a copy without File objects for JSON serialization
+      const draftData = {
+        ...newEmployee,
+        photo: null, // Exclude files
+        employeeSignature: null,
+        authorizedSignature: null,
+        uploadedDocuments: uploadedDocuments.map(doc => ({ name: doc.name, size: doc.size })), // Basic info
+      };
+      await saveDraft(userId, draftData);
+      toast.success("Draft saved successfully");
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      toast.error("Failed to save draft");
+    }
+  };
+
+  const handleAddEmployee = async () => {
     if (!newEmployee.name || !newEmployee.email || !newEmployee.aadharNumber) {
       toast.error("Please fill all required fields");
       return;
     }
 
-    const employee: Employee = {
-      id: employees.length + 1,
-      employeeId: `EMP${String(employees.length + 1).padStart(3, '0')}`,
-      name: newEmployee.name,
-      email: newEmployee.email,
-      phone: newEmployee.phone,
-      aadharNumber: newEmployee.aadharNumber,
-      department: newEmployee.department,
-      position: newEmployee.position,
-      joinDate: newEmployee.dateOfJoining || new Date().toISOString().split('T')[0],
-      status: "active",
-      salary: Number(newEmployee.salary),
-      uan: newEmployee.uanNumber || `1012345678${String(employees.length + 1).padStart(2, '0')}`,
-      esicNumber: newEmployee.esicNumber || `2312345678${String(employees.length + 1).padStart(2, '0')}`,
-      panNumber: newEmployee.panNumber || "",
-      photo: newEmployee.photo,
-      documents: uploadedDocuments.map((doc, index) => ({
-        id: index + 1,
-        type: doc.name.split('.')[0],
-        name: doc.name,
-        uploadDate: new Date().toISOString().split('T')[0],
-        expiryDate: "2025-12-31",
-        status: "valid" as const
-      })),
-      // Additional fields for forms
-      siteName: newEmployee.siteName,
-      dateOfBirth: newEmployee.dateOfBirth,
-      bloodGroup: newEmployee.bloodGroup,
-      permanentAddress: newEmployee.permanentAddress,
-      bankName: newEmployee.bankName,
-      accountNumber: newEmployee.accountNumber,
-      ifscCode: newEmployee.ifscCode,
-      fatherName: newEmployee.fatherName,
-      motherName: newEmployee.motherName,
-      spouseName: newEmployee.spouseName,
-      emergencyContactName: newEmployee.emergencyContactName,
-      emergencyContactPhone: newEmployee.emergencyContactPhone,
-      nomineeName: newEmployee.nomineeName,
-      nomineeRelation: newEmployee.nomineeRelation,
-      pantSize: newEmployee.pantSize,
-      shirtSize: newEmployee.shirtSize,
-      capSize: newEmployee.capSize
-    };
+    try {
+      const employeeId = `EMP${String(employees.length + 1).padStart(3, '0')}`;
+      const employee: Employee = {
+        id: employees.length + 1,
+        employeeId,
+        name: newEmployee.name,
+        email: newEmployee.email,
+        phone: newEmployee.phone,
+        aadharNumber: newEmployee.aadharNumber,
+        department: newEmployee.department,
+        position: newEmployee.position,
+        joinDate: newEmployee.dateOfJoining || new Date().toISOString().split('T')[0],
+        status: "active",
+        salary: Number(newEmployee.salary),
+        uan: newEmployee.uanNumber || `1012345678${String(employees.length + 1).padStart(2, '0')}`,
+        esicNumber: newEmployee.esicNumber || `2312345678${String(employees.length + 1).padStart(2, '0')}`,
+        panNumber: newEmployee.panNumber || "",
+        photo: newEmployee.photo,
+        documents: uploadedDocuments.map((doc, index) => ({
+          id: index + 1,
+          type: doc.name.split('.')[0],
+          name: doc.name,
+          uploadDate: new Date().toISOString().split('T')[0],
+          expiryDate: "2025-12-31",
+          status: "valid" as const
+        })),
+        // Additional fields for forms
+        siteName: newEmployee.siteName,
+        dateOfBirth: newEmployee.dateOfBirth,
+        bloodGroup: newEmployee.bloodGroup,
+        permanentAddress: newEmployee.permanentAddress,
+        bankName: newEmployee.bankName,
+        accountNumber: newEmployee.accountNumber,
+        ifscCode: newEmployee.ifscCode,
+        fatherName: newEmployee.fatherName,
+        motherName: newEmployee.motherName,
+        spouseName: newEmployee.spouseName,
+        emergencyContactName: newEmployee.emergencyContactName,
+        emergencyContactPhone: newEmployee.emergencyContactPhone,
+        nomineeName: newEmployee.nomineeName,
+        nomineeRelation: newEmployee.nomineeRelation,
+        pantSize: newEmployee.pantSize,
+        shirtSize: newEmployee.shirtSize,
+        capSize: newEmployee.capSize
+      };
 
-    const defaultSalaryStructure: SalaryStructure = {
-      id: salaryStructures.length + 1,
-      employeeId: employee.employeeId,
-      basic: Number(newEmployee.salary) * 0.7,
-      hra: Number(newEmployee.salary) * 0.2,
-      da: Number(newEmployee.salary) * 0.15,
-      conveyance: 1600,
-      medical: 1250,
-      specialAllowance: Number(newEmployee.salary) * 0.2,
-      otherAllowances: Number(newEmployee.salary) * 0.1,
-      pf: Number(newEmployee.salary) * 0.12,
-      esic: Number(newEmployee.salary) * 0.0075,
-      professionalTax: 200,
-      tds: 0,
-      otherDeductions: 0,
-      workingDays: 26,
-      paidDays: 26,
-      lopDays: 0
-    };
+      const defaultSalaryStructure: SalaryStructure = {
+        id: salaryStructures.length + 1,
+        employeeId,
+        basic: Number(newEmployee.salary) * 0.7,
+        hra: Number(newEmployee.salary) * 0.2,
+        da: Number(newEmployee.salary) * 0.15,
+        conveyance: 1600,
+        medical: 1250,
+        specialAllowance: Number(newEmployee.salary) * 0.2,
+        otherAllowances: Number(newEmployee.salary) * 0.1,
+        pf: Number(newEmployee.salary) * 0.12,
+        esic: Number(newEmployee.salary) * 0.0075,
+        professionalTax: 200,
+        tds: 0,
+        otherDeductions: 0,
+        workingDays: 26,
+        paidDays: 26,
+        lopDays: 0
+      };
 
-    setEmployees([...employees, employee]);
-    setSalaryStructures([...salaryStructures, defaultSalaryStructure]);
-    
-    // Check if setNewJoinees is a function before calling it
-    if (typeof setNewJoinees === 'function') {
-      const currentNewJoinees = Array.isArray(newJoinees) ? newJoinees : [];
-      setNewJoinees([...currentNewJoinees, employee]);
-    } else {
-      // If setNewJoinees is not provided, we can still add the employee
-      // but we just don't update the newJoinees list
-      console.log("setNewJoinees function not provided");
+      // Submit to Firebase
+      await addEmployee(employee);
+      await addSalaryStructure(defaultSalaryStructure);
+
+      // Update local state
+      setEmployees([...employees, employee]);
+      setSalaryStructures([...salaryStructures, defaultSalaryStructure]);
+
+      // Check if setNewJoinees is a function before calling it
+      if (typeof setNewJoinees === 'function') {
+        const currentNewJoinees = Array.isArray(newJoinees) ? newJoinees : [];
+        setNewJoinees([...currentNewJoinees, employee]);
+      } else {
+        console.log("setNewJoinees function not provided");
+      }
+
+      // Reset form
+      setNewEmployee({
+        name: "", email: "", phone: "", aadharNumber: "", department: "", position: "", salary: "",
+        photo: null, siteName: "", dateOfBirth: "", dateOfJoining: "", dateOfExit: "", bloodGroup: "",
+        permanentAddress: "", permanentPincode: "", localAddress: "", localPincode: "", bankName: "",
+        accountNumber: "", ifscCode: "", branchName: "", fatherName: "", motherName: "", spouseName: "",
+        numberOfChildren: "", emergencyContactName: "", emergencyContactPhone: "", emergencyContactRelation: "",
+        nomineeName: "", nomineeRelation: "", pantSize: "", shirtSize: "", capSize: "", idCardIssued: false,
+        westcoatIssued: false, apronIssued: false, employeeSignature: null, authorizedSignature: null,
+        panNumber: "", esicNumber: "", uanNumber: ""
+      });
+      setUploadedDocuments([]);
+      toast.success("Employee onboarded successfully!");
+    } catch (error) {
+      console.error("Error onboarding employee:", error);
+      toast.error("Failed to onboard employee");
     }
-    
-    // Reset form
-    setNewEmployee({
-      name: "", email: "", phone: "", aadharNumber: "", department: "", position: "", salary: "",
-      photo: null, siteName: "", dateOfBirth: "", dateOfJoining: "", dateOfExit: "", bloodGroup: "",
-      permanentAddress: "", permanentPincode: "", localAddress: "", localPincode: "", bankName: "",
-      accountNumber: "", ifscCode: "", branchName: "", fatherName: "", motherName: "", spouseName: "",
-      numberOfChildren: "", emergencyContactName: "", emergencyContactPhone: "", emergencyContactRelation: "",
-      nomineeName: "", nomineeRelation: "", pantSize: "", shirtSize: "", capSize: "", idCardIssued: false,
-      westcoatIssued: false, apronIssued: false, employeeSignature: null, authorizedSignature: null,
-      panNumber: "", esicNumber: "", uanNumber: ""
-    });
-    setUploadedDocuments([]);
-    toast.success("Employee added successfully!");
   };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2147,10 +2255,16 @@ const OnboardingTab = ({
               </div>
             </div>
 
-            <Button onClick={handleAddEmployee} className="w-full" size="lg">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Employee
-            </Button>
+            <div className="flex gap-4">
+              <Button onClick={handleSaveDraft} variant="outline" className="flex-1" size="lg">
+                <Save className="mr-2 h-4 w-4" />
+                Save Draft
+              </Button>
+              <Button onClick={handleAddEmployee} className="flex-1" size="lg">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Employee
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -19,12 +19,47 @@ export interface Employee {
   department: string;
   position: string;
   joinDate: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "left";
   salary: number;
-  photo?: string;
+  photo?: string | File;
   documents: Document[];
   uan?: string;
   esicNumber?: string;
+  panNumber?: string;
+  exitDate?: string;
+  gender?: string;
+  maritalStatus?: string;
+  // Additional onboarding fields
+  siteName?: string;
+  dateOfBirth?: string;
+  dateOfExit?: string;
+  bloodGroup?: string;
+  permanentAddress?: string;
+  permanentPincode?: string;
+  localAddress?: string;
+  localPincode?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  branchName?: string;
+  fatherName?: string;
+  motherName?: string;
+  spouseName?: string;
+  numberOfChildren?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  nomineeName?: string;
+  nomineeRelation?: string;
+  pantSize?: string;
+  shirtSize?: string;
+  capSize?: string;
+  idCardIssued?: boolean;
+  westcoatIssued?: boolean;
+  apronIssued?: boolean;
+  employeeSignature?: File | null;
+  authorizedSignature?: File | null;
+  epfForm11?: any; // For EPF form data
 }
 
 export interface LeaveRequest {
@@ -181,4 +216,7 @@ export interface NewEmployeeForm {
   apronIssued: boolean;
   employeeSignature: File | null;
   authorizedSignature: File | null;
+  panNumber: string;
+  esicNumber: string;
+  uanNumber: string;
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/shared/DashboardHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Mail, Phone, Building2, Save, Eye, EyeOff, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { useRole } from "@/context/RoleContext";
+import { db } from "@/firebase";
+import { ref, get, update } from "firebase/database";
 
 const Profile = () => {
+  const { user } = useRole();
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
-    name: "Admin User",
-    email: "admin@sk.com",
-    phone: "+1 234 567 8900",
-    department: "Administration",
-    role: "Admin"
+    name: "",
+    email: "",
+    phone: "",
+    department: "",
+    role: "",
+    site: "",
+    joinDate: "",
+    status: ""
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -33,13 +41,140 @@ const Profile = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  // Helper function to sanitize email for Firebase path
+  const sanitizeEmail = (email: string) => email.replace(/[@.]/g, '_');
+
+  // Fetch admin profile data
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!user?.email) return;
+
+      try {
+        setLoading(true);
+
+        // Get current user data to find creator
+        const userEmailPath = sanitizeEmail(user.email);
+        const userRef = ref(db, `users/${userEmailPath}`);
+        const userSnapshot = await get(userRef);
+
+        if (userSnapshot.exists()) {
+          const userData = userSnapshot.val();
+
+          // If user has managedBy field, fetch from creator's collection
+          if (userData.managedBy) {
+            const creatorEmail = userData.managedBy;
+            const adminsRef = ref(db, `users/${creatorEmail}/admins`);
+            const adminsSnapshot = await get(adminsRef);
+
+            if (adminsSnapshot.exists()) {
+              const adminsData = adminsSnapshot.val();
+
+              // Find the admin record with matching email
+              for (const adminId of Object.keys(adminsData)) {
+                const adminData = adminsData[adminId];
+                if (adminData.email === user.email) {
+                  setFormData({
+                    name: adminData.name || "",
+                    email: adminData.email || "",
+                    phone: adminData.phone || "",
+                    department: adminData.department || "",
+                    role: adminData.role || "",
+                    site: adminData.site || "",
+                    joinDate: adminData.joinDate || "",
+                    status: adminData.status || ""
+                  });
+                  break;
+                }
+              }
+            }
+          } else {
+            // For non-managed admins (created via signup), use current user data
+            setFormData({
+              name: userData.name || "",
+              email: userData.email || "",
+              phone: userData.phone || "",
+              department: userData.department || "",
+              role: userData.role || "",
+              site: userData.site || "",
+              joinDate: userData.createdAt || "",
+              status: userData.status || "active"
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching profile data:", error);
+        toast.error("Failed to load profile data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfileData();
+  }, [user?.email]);
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Simulate API call
-    setTimeout(() => {
-      toast.success("Profile updated successfully!");
-    }, 500);
+    if (!user?.email) return;
+
+    try {
+      // Get current user data to find creator
+      const userEmailPath = sanitizeEmail(user.email);
+      const userRef = ref(db, `users/${userEmailPath}`);
+      const userSnapshot = await get(userRef);
+
+      if (userSnapshot.exists()) {
+        const userData = userSnapshot.val();
+
+        if (userData.managedBy) {
+          // Update in creator's collection
+          const creatorEmail = userData.managedBy;
+          const adminsRef = ref(db, `users/${creatorEmail}/admins`);
+          const adminsSnapshot = await get(adminsRef);
+
+          if (adminsSnapshot.exists()) {
+            const adminsData = adminsSnapshot.val();
+
+            // Find and update the admin record
+            for (const adminId of Object.keys(adminsData)) {
+              const adminData = adminsData[adminId];
+              if (adminData.email === user.email) {
+                const adminRef = ref(db, `users/${creatorEmail}/admins/${adminId}`);
+                await update(adminRef, {
+                  name: formData.name,
+                  phone: formData.phone,
+                  department: formData.department,
+                  site: formData.site,
+                  updatedAt: new Date().toISOString()
+                });
+
+                // Also update the main user record
+                await update(userRef, {
+                  name: formData.name,
+                  phone: formData.phone,
+                  department: formData.department,
+                  site: formData.site
+                });
+
+                toast.success("Profile updated successfully!");
+                return;
+              }
+            }
+          }
+        } else {
+          // For non-managed admins, update main user record
+          await update(userRef, {
+            name: formData.name,
+            phone: formData.phone,
+            department: formData.department,
+            site: formData.site
+          });
+          toast.success("Profile updated successfully!");
+        }
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error("Failed to update profile");
+    }
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -117,11 +252,25 @@ const Profile = () => {
     }));
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader title="My Profile" subtitle="Manage your account settings" />
+        <div className="p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading profile data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader title="My Profile" subtitle="Manage your account settings" />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -360,7 +509,9 @@ const Profile = () => {
               </div>
               <div>
                 <Label className="text-muted-foreground">Member Since</Label>
-                <p className="font-medium">January 15, 2024</p>
+                <p className="font-medium">
+                  {formData.joinDate ? new Date(formData.joinDate).toLocaleDateString() : "N/A"}
+                </p>
               </div>
               <div>
                 <Label className="text-muted-foreground">Last Updated</Label>

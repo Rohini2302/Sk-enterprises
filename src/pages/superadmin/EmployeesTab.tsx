@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,17 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Eye, Trash2, Plus, Download, Sheet, User, Edit, Camera, FileText, ArrowUpDown, Calendar, Files } from "lucide-react";
+import { Eye, Trash2, Plus, Download, Sheet, User, Edit, Camera, FileText, ArrowUpDown, Calendar, Files, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Employee } from "./types";
+import { getEmployees, updateEmployee, deleteEmployee } from "@/services/employeeService";
 import StatCard from "./StatCard";
 import SearchBar from "./SearchBar";
 import Pagination from "./Pagination";
 import ExcelImportDialog from "./ExcelImportDialog";
 
 interface EmployeesTabProps {
-  employees: Employee[];
-  setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
   setActiveTab: (tab: string) => void;
   newJoinees: Employee[];
   setNewJoinees: React.Dispatch<React.SetStateAction<Employee[]>>;
@@ -25,27 +24,28 @@ interface EmployeesTabProps {
   setLeftEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
 }
 
-const EmployeesTab = ({ 
-  employees, 
-  setEmployees, 
+const EmployeesTab = ({
   setActiveTab,
   newJoinees,
   setNewJoinees,
   leftEmployees,
   setLeftEmployees
 }: EmployeesTabProps) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [employeesPage, setEmployeesPage] = useState(1);
-  const [employeesItemsPerPage, setEmployeesItemsPerPage] = useState(5);
-  const [sortBy, setSortBy] = useState<string>("");
-  const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
-  const [selectedSite, setSelectedSite] = useState<string>("all");
-  const [selectedJoinDate, setSelectedJoinDate] = useState<string>("");
-  const [selectedEmployeeForDocuments, setSelectedEmployeeForDocuments] = useState<Employee | null>(null);
-  const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false);
-  const [epfForm11DialogOpen, setEpfForm11DialogOpen] = useState(false);
-  const [selectedEmployeeForEPF, setSelectedEmployeeForEPF] = useState<Employee | null>(null);
+   const [employees, setEmployees] = useState<Employee[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+   const [searchTerm, setSearchTerm] = useState("");
+   const [importDialogOpen, setImportDialogOpen] = useState(false);
+   const [employeesPage, setEmployeesPage] = useState(1);
+   const [employeesItemsPerPage, setEmployeesItemsPerPage] = useState(5);
+   const [sortBy, setSortBy] = useState<string>("");
+   const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
+   const [selectedSite, setSelectedSite] = useState<string>("all");
+   const [selectedJoinDate, setSelectedJoinDate] = useState<string>("");
+   const [selectedEmployeeForDocuments, setSelectedEmployeeForDocuments] = useState<Employee | null>(null);
+   const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false);
+   const [epfForm11DialogOpen, setEpfForm11DialogOpen] = useState(false);
+   const [selectedEmployeeForEPF, setSelectedEmployeeForEPF] = useState<Employee | null>(null);
   const [epfFormData, setEpfFormData] = useState({
     name: "",
     fatherName: "",
@@ -86,6 +86,26 @@ const EmployeesTab = ({
     transferRequestGenerated: false,
     physicalClaimFiled: false
   });
+
+  // Fetch employees on component mount
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const fetchedEmployees = await getEmployees();
+        setEmployees(fetchedEmployees);
+      } catch (err) {
+        console.error("Error fetching employees:", err);
+        setError("Failed to load employees");
+        toast.error("Failed to load employees");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
 
   // Get unique departments and sites for filters
   const departments = Array.from(new Set(employees.map(emp => emp.department))).filter(Boolean);
@@ -133,20 +153,44 @@ const EmployeesTab = ({
   const leftEmployeesCount = employees.filter(emp => emp.status === "left").length;
   const departmentsCount = new Set(employees.map(e => e.department)).size;
 
-  const handleDeleteEmployee = (id: number) => {
-    setEmployees(employees.filter(emp => emp.id !== id));
-    toast.success("Employee deleted successfully!");
+  const handleDeleteEmployee = async (id: number) => {
+    try {
+      // Find the employee to get the Firebase key
+      const employeeToDelete = employees.find(emp => emp.id === id);
+      if (!employeeToDelete) return;
+
+      // For now, we'll use the employeeId as the Firebase key
+      // In a real implementation, you'd need to store the Firebase key
+      await deleteEmployee(employeeToDelete.employeeId);
+
+      // Update local state
+      setEmployees(employees.filter(emp => emp.id !== id));
+      toast.success("Employee deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      toast.error("Failed to delete employee");
+    }
   };
 
-  const handleMarkAsLeft = (employee: Employee) => {
-    const updatedEmployees = employees.filter(emp => emp.id !== employee.id);
-    const updatedNewJoinees = newJoinees.filter(emp => emp.id !== employee.id);
-    const leftEmployee = { ...employee, status: "left" as const, exitDate: new Date().toISOString().split('T')[0] };
-    
-    setEmployees(updatedEmployees);
-    setNewJoinees(updatedNewJoinees);
-    setLeftEmployees([...leftEmployees, leftEmployee]);
-    toast.success("Employee marked as left");
+  const handleMarkAsLeft = async (employee: Employee) => {
+    try {
+      const leftEmployee = { ...employee, status: "left" as const, exitDate: new Date().toISOString().split('T')[0] };
+
+      // Update in Firebase
+      await updateEmployee(employee.employeeId, { status: "left", exitDate: leftEmployee.exitDate });
+
+      // Update local state
+      const updatedEmployees = employees.filter(emp => emp.id !== employee.id);
+      const updatedNewJoinees = newJoinees.filter(emp => emp.id !== employee.id);
+
+      setEmployees(updatedEmployees);
+      setNewJoinees(updatedNewJoinees);
+      setLeftEmployees([...leftEmployees, leftEmployee]);
+      toast.success("Employee marked as left");
+    } catch (error) {
+      console.error("Error marking employee as left:", error);
+      toast.error("Failed to mark employee as left");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -950,6 +994,26 @@ const EmployeesTab = ({
     printWindow.document.close();
     toast.success(`EPF Form 11 generated for ${employee.name}`);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading employees...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600 mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

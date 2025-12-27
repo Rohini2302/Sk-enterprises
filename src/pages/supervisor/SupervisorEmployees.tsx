@@ -262,9 +262,11 @@ const SupervisorEmployees = () => {
               
               <TabsContent value="employees">
                 <EmployeesTab
-                  employees={employees}
-                  setEmployees={setEmployees}
                   setActiveTab={setActiveTab}
+                  newJoinees={[]}
+                  setNewJoinees={() => {}}
+                  leftEmployees={[]}
+                  setLeftEmployees={() => {}}
                 />
               </TabsContent>
               

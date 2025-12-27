@@ -6,16 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Search, 
-  ArrowLeft, 
-  Download, 
-  Filter, 
-  Calendar, 
-  Building, 
-  Users, 
-  Edit, 
-  Save, 
+import {
+  Search,
+  ArrowLeft,
+  Download,
+  Filter,
+  Calendar,
+  Building,
+  Users,
+  Edit,
+  Save,
   X,
   Plus,
   Minus,
@@ -26,10 +26,13 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { getEmployees, Employee as HREmployee } from "@/services/employeeService";
+import { getSites, Site } from "@/services/siteService";
 
 // Enhanced shortages data structure with supervisor names and editable deploy
 const shortagesData = {
@@ -212,7 +215,108 @@ const calculateDaysBetween = (startDate: string, endDate: string): number => {
 };
 
 // Generate employee data for sites with weekly off counted in present
-const generateEmployeeData = (siteName: string, date: string, totalEmployees: number, presentCount: number): Employee[] => {
+const generateEmployeeData = (siteName: string, date: string, totalEmployees: number, presentCount: number, allEmployees: HREmployee[]): Employee[] => {
+  // Filter employees by site
+  const siteEmployees = allEmployees.filter(emp => emp.siteName === siteName);
+
+  if (siteEmployees.length === 0) {
+    // Fallback to mock data if no real employees for this site
+    return generateMockEmployeeData(siteName, date, totalEmployees, presentCount);
+  }
+
+  const employees: Employee[] = [];
+  const actions = ['fine', 'advance', 'other', 'none'] as const;
+  const remarks = [
+    'Late arrival',
+    'Early departure',
+    'Half day',
+    'Permission granted',
+    'Medical leave',
+    'Personal work',
+    '',
+    '',
+    '',
+    '' // More empty strings to have some employees without remarks
+  ];
+
+  // Weekly off employees are included in present count
+  const weeklyOffCount = Math.floor(presentCount * 0.15); // 15% of present employees are on weekly off
+  const regularPresentCount = presentCount - weeklyOffCount;
+
+  // Get employees for this site
+  const availableEmployees = siteEmployees.slice(0, totalEmployees);
+
+  // Generate weekly off employees (counted in present)
+  for (let i = 0; i < Math.min(weeklyOffCount, availableEmployees.length); i++) {
+    const emp = availableEmployees[i];
+    employees.push({
+      id: `${emp.employeeId}_${date}`,
+      name: emp.name,
+      department: emp.department,
+      position: emp.position,
+      status: 'weekly-off',
+      site: siteName,
+      date: date,
+      remark: 'Weekly off',
+      action: 'none'
+    });
+  }
+
+  // Generate regular present employees
+  for (let i = weeklyOffCount; i < Math.min(weeklyOffCount + regularPresentCount, availableEmployees.length); i++) {
+    const emp = availableEmployees[i];
+    const hasRemark = Math.random() > 0.5;
+    const hasAction = Math.random() > 0.7;
+
+    employees.push({
+      id: `${emp.employeeId}_${date}`,
+      name: emp.name,
+      department: emp.department,
+      position: emp.position,
+      status: 'present',
+      checkInTime: '08:00',
+      checkOutTime: '17:00',
+      site: siteName,
+      date: date,
+      remark: hasRemark ? remarks[Math.floor(Math.random() * remarks.length)] : '',
+      action: hasAction ? actions[Math.floor(Math.random() * actions.length)] : 'none'
+    });
+  }
+
+  // Generate absent employees (remaining)
+  const absentCount = totalEmployees - presentCount;
+  const absentStartIndex = weeklyOffCount + regularPresentCount;
+
+  for (let i = 0; i < Math.min(absentCount, availableEmployees.length - absentStartIndex); i++) {
+    const emp = availableEmployees[absentStartIndex + i];
+    const hasRemark = Math.random() > 0.3;
+    const hasAction = Math.random() > 0.5;
+
+    employees.push({
+      id: `${emp.employeeId}_${date}`,
+      name: emp.name,
+      department: emp.department,
+      position: emp.position,
+      status: 'absent',
+      site: siteName,
+      date: date,
+      remark: hasRemark ? remarks[Math.floor(Math.random() * remarks.length)] : '',
+      action: hasAction ? actions[Math.floor(Math.random() * actions.length)] : 'none'
+    });
+  }
+
+  // If we don't have enough real employees, fill with mock data
+  const remainingCount = totalEmployees - employees.length;
+  if (remainingCount > 0) {
+    const mockEmployees = generateMockEmployeeData(siteName, date, remainingCount, Math.floor(remainingCount * (presentCount / totalEmployees)));
+    employees.push(...mockEmployees);
+  }
+
+  return employees;
+};
+
+// Fallback mock data generator
+const generateMockEmployeeData = (siteName: string, date: string, totalEmployees: number, presentCount: number): Employee[] => {
   const employees: Employee[] = [];
   const departments = ['Housekeeping', 'Security', 'Parking', 'Waste Management', 'Consumables', 'Other'];
   const positions = ['Staff', 'Supervisor', 'Manager', 'Executive'];
@@ -229,33 +333,33 @@ const generateEmployeeData = (siteName: string, date: string, totalEmployees: nu
     '',
     '' // More empty strings to have some employees without remarks
   ];
-  
+
   // Weekly off employees are included in present count
   const weeklyOffCount = Math.floor(presentCount * 0.15); // 15% of present employees are on weekly off
   const regularPresentCount = presentCount - weeklyOffCount;
-  
+
   // Generate weekly off employees (counted in present)
   for (let i = 1; i <= weeklyOffCount; i++) {
     employees.push({
-      id: `EMP${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}WO${i}`,
+      id: `MOCK${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}WO${i}`,
       name: `Employee ${i} ${siteName.substring(0, 8)}`,
       department: departments[Math.floor(Math.random() * departments.length)],
       position: positions[Math.floor(Math.random() * positions.length)],
       status: 'weekly-off',
       site: siteName,
       date: date,
-      remark: 'Weekly off', // Add remark for weekly off
-      action: 'none' // No action for weekly off
+      remark: 'Weekly off',
+      action: 'none'
     });
   }
-  
+
   // Generate regular present employees
   for (let i = 1; i <= regularPresentCount; i++) {
     const hasRemark = Math.random() > 0.5;
     const hasAction = Math.random() > 0.7;
-    
+
     employees.push({
-      id: `EMP${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}${i}`,
+      id: `MOCK${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}${i}`,
       name: `Employee ${i} ${siteName.substring(0, 8)}`,
       department: departments[Math.floor(Math.random() * departments.length)],
       position: positions[Math.floor(Math.random() * positions.length)],
@@ -268,15 +372,15 @@ const generateEmployeeData = (siteName: string, date: string, totalEmployees: nu
       action: hasAction ? actions[Math.floor(Math.random() * actions.length)] : 'none'
     });
   }
-  
+
   // Generate absent employees (remaining)
   const absentCount = totalEmployees - presentCount;
   for (let i = 1; i <= absentCount; i++) {
     const hasRemark = Math.random() > 0.3;
     const hasAction = Math.random() > 0.5;
-    
+
     employees.push({
-      id: `EMP${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}A${i}`,
+      id: `MOCK${siteName.substring(0, 3).toUpperCase()}${date.replace(/-/g, '')}A${i}`,
       name: `Employee ${i} ${siteName.substring(0, 8)}`,
       department: departments[Math.floor(Math.random() * departments.length)],
       position: positions[Math.floor(Math.random() * positions.length)],
@@ -287,31 +391,52 @@ const generateEmployeeData = (siteName: string, date: string, totalEmployees: nu
       action: hasAction ? actions[Math.floor(Math.random() * actions.length)] : 'none'
     });
   }
-  
+
   return employees;
 };
 
 // Generate cumulative site attendance data for the period with duration-based calculations
-const generateSiteAttendanceData = (startDate: string, endDate: string) => {
+const generateSiteAttendanceData = (startDate: string, endDate: string, employees: HREmployee[], sites: Site[]) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const dateRange: string[] = [];
-  
+
   // Calculate number of days in the period
   for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
     dateRange.push(date.toISOString().split('T')[0]);
   }
-  
+
   const daysInPeriod = calculateDaysBetween(startDate, endDate);
   const isSingleDay = daysInPeriod === 1;
   const result = [];
-  
+
+  // Use real sites if available, otherwise fallback to dummy sites
+  const sitesToUse = sites.length > 0 ? sites : siteNames.map((name, index) => ({
+    id: `dummy-${index}`,
+    name,
+    clientName: 'Default Client',
+    location: 'Default Location',
+    areaSqft: 1000,
+    siteManager: 'Default Manager',
+    managerPhone: '0000000000',
+    supervisor: 'Default Supervisor',
+    supervisorPhone: '0000000000',
+    contractValue: 100000,
+    contractEndDate: '2025-12-31',
+    services: ['Cleaning'],
+    staffDeployment: [{ role: 'Cleaner', count: 10 }],
+    status: 'active' as const
+  }));
+
   // For each site, generate cumulative data for the period
-  for (let i = 0; i < siteNames.length; i++) {
-    const siteName = siteNames[i];
+  for (let i = 0; i < sitesToUse.length; i++) {
+    const site = sitesToUse[i];
+    const siteName = site.name;
     const siteFactor = (i + 1) * 123;
-    
-    const totalEmployees = Math.floor(20 + (Math.sin(siteFactor) * 15) + 15);
+
+    // Calculate actual employee count for this site
+    const siteEmployees = employees.filter((emp: any) => emp.siteName === siteName);
+    const totalEmployees = siteEmployees.length > 0 ? siteEmployees.length : Math.floor(20 + (Math.sin(siteFactor) * 15) + 15);
     const attendanceRate = 0.85 + (Math.sin(siteFactor) * 0.1);
     
     // Calculate cumulative totals for the period
@@ -403,7 +528,7 @@ const generateSiteAttendanceData = (startDate: string, endDate: string) => {
       onSiteRequirement: isSingleDay ? (totalEmployees - singleDayWeeklyOff) : Math.round((totalRequired - totalWeeklyOff) / daysInPeriod),
       actualPresent: isSingleDay ? singleDayActualPresent : Math.round(cumulativePresent / daysInPeriod) - Math.round(cumulativeWeeklyOff / daysInPeriod),
       // Generate sample employees for one day (for view details)
-      employees: generateEmployeeData(siteName, startDate, totalEmployees, Math.round(cumulativePresent / daysInPeriod))
+      employees: generateEmployeeData(siteName, startDate, totalEmployees, Math.round(cumulativePresent / daysInPeriod), employees)
     };
     
     // Add single day specific fields
@@ -437,7 +562,7 @@ const generateSiteAttendanceData = (startDate: string, endDate: string) => {
 };
 
 // Generate cumulative department site data for the period with duration-based calculations
-const generateDepartmentSiteData = (startDate: string, endDate: string, department: string) => {
+const generateDepartmentSiteData = (startDate: string, endDate: string, department: string, employees: HREmployee[]) => {
   const deptData = departmentViewData.find(d => d.department === department);
   
   if (!deptData) return [];
@@ -556,7 +681,7 @@ const generateDepartmentSiteData = (startDate: string, endDate: string, departme
       onSiteRequirement: isSingleDay ? (total - singleDayWeeklyOff) : Math.round((totalRequired - totalWeeklyOff) / daysInPeriod),
       actualPresent: isSingleDay ? singleDayActualPresent : Math.round(cumulativePresent / daysInPeriod) - Math.round(cumulativeWeeklyOff / daysInPeriod),
       // Generate sample employees for one day (for view details)
-      employees: generateEmployeeData(siteName, startDate, total, Math.round(cumulativePresent / daysInPeriod))
+      employees: generateEmployeeData(siteName, startDate, total, Math.round(cumulativePresent / daysInPeriod), employees)
     };
     
     // Add single day specific fields
@@ -731,6 +856,7 @@ const SiteEmployeeDetails: React.FC<SiteEmployeeDetailsProps> = ({ siteData, onB
 
     toast.success(`Employee data exported successfully`);
   };
+
 
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6">
@@ -1833,15 +1959,19 @@ const SuperAdminAttendanceView = () => {
   const initialSelectedSiteId = searchParams.get('selectedSiteId') || '';
 
   const [viewType, setViewType] = useState<'site' | 'department' | 'shortages'>(initialViewType as 'site' | 'department' | 'shortages');
-  const [selectedDepartment, setSelectedDepartment] = useState(initialDepartment);
-  const [startDate, setStartDate] = useState(initialStartDate);
-  const [endDate, setEndDate] = useState(initialEndDate);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [showSiteDetails, setShowSiteDetails] = useState(initialSiteDetails);
-  const [selectedSite, setSelectedSite] = useState<any>(null);
-  
-  const itemsPerPage = 10;
+   const [selectedDepartment, setSelectedDepartment] = useState(initialDepartment);
+   const [startDate, setStartDate] = useState(initialStartDate);
+   const [endDate, setEndDate] = useState(initialEndDate);
+   const [searchTerm, setSearchTerm] = useState('');
+   const [currentPage, setCurrentPage] = useState(1);
+   const [showSiteDetails, setShowSiteDetails] = useState(initialSiteDetails);
+   const [selectedSite, setSelectedSite] = useState<any>(null);
+   const [employees, setEmployees] = useState<HREmployee[]>([]);
+   const [sites, setSites] = useState<Site[]>([]);
+   const [loadingEmployees, setLoadingEmployees] = useState(true);
+   const [loadingSites, setLoadingSites] = useState(true);
+
+   const itemsPerPage = 10;
 
   // Calculate days in period
   const daysInPeriod = useMemo(() => {
@@ -1851,13 +1981,13 @@ const SuperAdminAttendanceView = () => {
   // Generate cumulative data for the period
   const displayData = useMemo(() => {
     if (viewType === 'department' && selectedDepartment) {
-      return generateDepartmentSiteData(startDate, endDate, selectedDepartment);
+      return generateDepartmentSiteData(startDate, endDate, selectedDepartment, employees);
     } else if (viewType === 'shortages') {
       return [];
     } else {
-      return generateSiteAttendanceData(startDate, endDate);
+      return generateSiteAttendanceData(startDate, endDate, employees, sites);
     }
-  }, [viewType, selectedDepartment, startDate, endDate]);
+  }, [viewType, selectedDepartment, startDate, endDate, employees, sites]);
 
   // Filter data based on search term
   const filteredData = useMemo(() => {
@@ -2118,15 +2248,51 @@ const SuperAdminAttendanceView = () => {
   };
 
   // Load selected site from URL params on component mount
-  useEffect(() => {
-    if (initialSiteDetails && initialSelectedSiteId) {
-      const site = displayData.find(item => item.id === initialSelectedSiteId || item.siteId === initialSelectedSiteId);
-      if (site) {
-        setSelectedSite(site);
-        setShowSiteDetails(true);
-      }
-    }
-  }, [initialSiteDetails, initialSelectedSiteId, displayData]);
+   useEffect(() => {
+     if (initialSiteDetails && initialSelectedSiteId) {
+       const site = displayData.find(item => item.id === initialSelectedSiteId || item.siteId === initialSelectedSiteId);
+       if (site) {
+         setSelectedSite(site);
+         setShowSiteDetails(true);
+       }
+     }
+   }, [initialSiteDetails, initialSelectedSiteId, displayData]);
+
+   // Fetch employees from Firebase
+   useEffect(() => {
+     const fetchEmployees = async () => {
+       try {
+         setLoadingEmployees(true);
+         const fetchedEmployees = await getEmployees();
+         setEmployees(fetchedEmployees);
+       } catch (error) {
+         console.error("Error fetching employees:", error);
+         toast.error("Failed to load employees");
+       } finally {
+         setLoadingEmployees(false);
+       }
+     };
+
+     fetchEmployees();
+   }, []);
+
+   // Fetch sites from Firebase
+   useEffect(() => {
+     const fetchSites = async () => {
+       try {
+         setLoadingSites(true);
+         const fetchedSites = await getSites();
+         setSites(fetchedSites);
+       } catch (error) {
+         console.error("Error fetching sites:", error);
+         toast.error("Failed to load sites");
+       } finally {
+         setLoadingSites(false);
+       }
+     };
+
+     fetchSites();
+   }, []);
 
   // Calculate total pages
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -2210,8 +2376,22 @@ const SuperAdminAttendanceView = () => {
       <SiteEmployeeDetails
         siteData={selectedSite}
         onBack={handleBackFromDetails}
-        viewType={viewType}
+        viewType={viewType as 'site' | 'department'}
       />
+    );
+  }
+
+  if (loadingEmployees || loadingSites) {
+    return (
+      <div className="min-h-screen bg-background p-4 sm:p-6 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-lg">
+            {loadingEmployees && loadingSites ? "Loading employees and sites..." :
+             loadingEmployees ? "Loading employees..." : "Loading sites..."}
+          </p>
+        </div>
+      </div>
     );
   }
 

@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RoleProvider } from "@/context/RoleContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { PublicRoute } from "@/components/PublicRoute";
 
 // Auth Pages
 import Login from "./pages/Login";
@@ -26,6 +25,7 @@ import SupervisorDashboard from "./pages/supervisor/SupervisorDashboard";
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 
 // Super Admin Pages
+import UsersRoles from "./pages/superadmin/UsersRoles";
 import UsersRolesManagement from "./pages/superadmin/UsersRolesManagement";
 import Managers from "./pages/superadmin/Managers";
 import Supervisors from "./pages/superadmin/Supervisors";
@@ -68,7 +68,7 @@ import Tasks from "./pages/supervisor/Tasks";
 import SupervisorEmployees from "./pages/supervisor/SupervisorEmployees";
 import Attendance from "./pages/supervisor/Attendance";
 import SupervisorSettings from "./pages/supervisor/SupervisorSettings";
-import InventoryPage from "./pages/supervisor/InventoryPage";
+import InventoryPage from "./pages/supervisor/InventoryPage"; // ADD THIS IMPORT
 
 // Employee Pages
 import EmployeeTasks from "./pages/employee/EmployeeTasks";
@@ -84,6 +84,7 @@ import SuperAdminWorkIssues from "./pages/superadmin/SuperAdminWorkIssues";
 import AdminAttendanceView from "./pages/admin/AdminAttendanceView";
 import ManagerOperations from "./pages/manager/ManagerOperations";
 
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -96,24 +97,8 @@ const App = () => (
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Navigate to="/login" replace />} />
-            
-            <Route 
-              path="/login" 
-              element={
-                <PublicRoute>
-                  <Login />
-                </PublicRoute>
-              } 
-            />
-            
-            <Route 
-              path="/signup" 
-              element={
-                <PublicRoute>
-                  <Signup />
-                </PublicRoute>
-              } 
-            />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
 
             {/* Super Admin Routes */}
             <Route
@@ -124,7 +109,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<SuperAdminDashboard />} />
               <Route path="users" element={<UsersRolesManagement />} />
               <Route path="managers" element={<Managers />} />
@@ -142,7 +126,6 @@ const App = () => (
               <Route path="settings" element={<Settings />} />
               <Route path="attendaceview" element={<AttendanceTab />} />
               <Route path="leave" element={<LeaveManagement />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 
             {/* Admin Routes */}
@@ -154,7 +137,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="profile" element={<AdminProfile />} />
               <Route path="team" element={<AdminTeam />} />
@@ -171,7 +153,6 @@ const App = () => (
               <Route path="billing" element={<div className="p-6"><h1 className="text-2xl font-bold">Billing & Finance</h1></div>} />
               <Route path="operations" element={<div className="p-6"><h1 className="text-2xl font-bold">Operations</h1></div>} />
               <Route path="documents" element={<div className="p-6"><h1 className="text-2xl font-bold">Documents</h1></div>} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 
             {/* Manager Routes */}
@@ -183,18 +164,16 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<ManagerDashboard />} />
               <Route path="profile" element={<ManagerProfile />} />
               <Route path="supervisors" element={<ManagerSupervisors />} />
               <Route path="tasks" element={<ManagerTasks />} />
               <Route path="reports" element={<ManagerReports />} />
               <Route path="leave" element={<ManagerLeave />} />
-              <Route path="operations" element={<ManagerOperations />} />
-              <Route path="managerattendance" element={<ManagerAttendance />} />
+               <Route path="operations" element={<ManagerOperations />} />
+              <Route path="managerattendance" element={<ManagerAttendance />}/>
               <Route path="notifications" element={<ManagerNotifications />} />
               <Route path="settings" element={<ManagerSettings />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 
             {/* Supervisor Routes */}
@@ -206,19 +185,17 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<SupervisorDashboard />} />
               <Route path="profile" element={<SupervisorProfile />} />
               <Route path="tasks" element={<Tasks />} />
               <Route path="query" element={<WorkQuery />} />
-              <Route path="inventory" element={<InventoryPage />} />
+              <Route path="inventory" element={<InventoryPage />} /> {/* ADD THIS ROUTE */}
               <Route path="employees" element={<SupervisorEmployees />} />
               <Route path="attendance" element={<Attendance />} />
               <Route path="leave" element={<SupervisorLeave />} />
               <Route path="reports" element={<SupervisorReports />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<SupervisorSettings />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 
             {/* Employee Routes */}
@@ -230,7 +207,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<EmployeeDashboard />} />
               <Route path="tasks" element={<EmployeeTasks />} />
               <Route path="documents" element={<EmployeeDocuments />} />
@@ -238,10 +214,8 @@ const App = () => (
               <Route path="leave" element={<ApplyLeave />} />
               <Route path="attendance" element={<EmployeeAttendance />} />
               <Route path="notifications" element={<Notifications />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
             </Route>
 
-            {/* 404 Route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
